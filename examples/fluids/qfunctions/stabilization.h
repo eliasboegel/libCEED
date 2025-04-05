@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -7,7 +7,7 @@
 
 /// @file
 /// Helper functions for computing stabilization terms of a newtonian simulation
-#include <ceed.h>
+#include <ceed/types.h>
 
 #include "newtonian_state.h"
 

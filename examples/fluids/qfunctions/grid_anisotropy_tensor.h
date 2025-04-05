@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -8,7 +8,7 @@
 /// @file
 /// Element anisotropy tensor, as defined in 'Invariant data-driven subgrid stress modeling in the strain-rate eigenframe for large eddy simulation'
 /// Prakash et al. 2022
-#include <ceed.h>
+#include <ceed/types.h>
 
 #include "utils.h"
 #include "utils_eigensolver_jacobi.h"

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -7,8 +7,15 @@
 
 /// @file
 /// Internal header for CUDA shared memory basis read/write templates
+#include <ceed/types.h>
 
-#include <ceed.h>
+//------------------------------------------------------------------------------
+// Load matrices for basis actions
+//------------------------------------------------------------------------------
+template <int P, int Q>
+inline __device__ void LoadMatrix(SharedData_Cuda &data, const CeedScalar *__restrict__ d_B, CeedScalar *B) {
+  for (CeedInt i = data.t_id; i < P * Q; i += blockDim.x * blockDim.y * blockDim.z) B[i] = d_B[i];
+}
 
 //------------------------------------------------------------------------------
 // 1D
@@ -159,6 +166,46 @@ inline __device__ void SumElementStrided3d(SharedData_Cuda &data, const CeedInt 
       for (CeedInt comp = 0; comp < NUM_COMP; comp++) {
         d_v[ind + comp * strides_comp] += r_v[z + comp * P_1D];
       }
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+// AtPoints
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// E-vector -> single point
+//------------------------------------------------------------------------------
+template <int NUM_COMP, int NUM_PTS>
+inline __device__ void ReadPoint(SharedData_Cuda &data, const CeedInt elem, const CeedInt p, const CeedInt points_in_elem,
+                                 const CeedInt strides_point, const CeedInt strides_comp, const CeedInt strides_elem,
+                                 const CeedScalar *__restrict__ d_u, CeedScalar *r_u) {
+  const CeedInt ind = (p % NUM_PTS) * strides_point + elem * strides_elem;
+
+  if (p < points_in_elem) {
+    for (CeedInt comp = 0; comp < NUM_COMP; comp++) {
+      r_u[comp] = d_u[ind + comp * strides_comp];
+    }
+  } else {
+    for (CeedInt comp = 0; comp < NUM_COMP; comp++) {
+      r_u[comp] = 0.0;
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+// Single point -> E-vector
+//------------------------------------------------------------------------------
+template <int NUM_COMP, int NUM_PTS>
+inline __device__ void WritePoint(SharedData_Cuda &data, const CeedInt elem, const CeedInt p, const CeedInt points_in_elem,
+                                  const CeedInt strides_point, const CeedInt strides_comp, const CeedInt strides_elem, const CeedScalar *r_v,
+                                  CeedScalar *d_v) {
+  if (p < points_in_elem) {
+    const CeedInt ind = (p % NUM_PTS) * strides_point + elem * strides_elem;
+
+    for (CeedInt comp = 0; comp < NUM_COMP; comp++) {
+      d_v[ind + comp * strides_comp] = r_v[comp];
     }
   }
 }

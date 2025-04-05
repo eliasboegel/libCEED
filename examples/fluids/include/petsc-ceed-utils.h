@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -220,6 +220,7 @@ static inline PetscErrorCode VecCopyPetscToCeed(Vec X_petsc, CeedVector x_ceed) 
   PetscCall(VecGetArrayReadAndMemType(X_petsc, (const PetscScalar **)&x, &mem_type));
   PetscCallCeed(ceed, CeedVectorSetArray(x_ceed, MemTypePetscToCeed(mem_type), CEED_COPY_VALUES, x));
   PetscCall(VecRestoreArrayReadAndMemType(X_petsc, (const PetscScalar **)&x));
+  PetscCheck(CeedDestroy(&ceed) == CEED_ERROR_SUCCESS, PetscObjectComm((PetscObject)X_petsc), PETSC_ERR_LIB, "Destroying Ceed object failed");
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 

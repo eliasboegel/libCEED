@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
   CeedOperator         op_error;
   CeedVector           rhs_ceed, target;
   BPType               bp_choice;
-  VecType              vec_type;
+  VecType              vec_type = VECSTANDARD;
   PetscMemType         mem_type;
 
   PetscCall(PetscInitialize(&argc, &argv, NULL, help));
@@ -92,6 +92,27 @@ int main(int argc, char **argv) {
   PetscCall(PetscOptionsBool("-simplex", "Use simplices, or tensor product cells", NULL, simplex, &simplex, NULL));
   PetscOptionsEnd();
 
+  // Set up libCEED
+  CeedInit(ceed_resource, &ceed);
+  CeedMemType mem_type_backend;
+  CeedGetPreferredMemType(ceed, &mem_type_backend);
+
+  // Set mesh vec_type
+  switch (mem_type_backend) {
+    case CEED_MEM_HOST:
+      vec_type = VECSTANDARD;
+      break;
+    case CEED_MEM_DEVICE: {
+      const char *resolved;
+
+      CeedGetResource(ceed, &resolved);
+      if (strstr(resolved, "/gpu/cuda")) vec_type = VECCUDA;
+      else if (strstr(resolved, "/gpu/hip/occa")) vec_type = VECSTANDARD;  // https://github.com/CEED/libCEED/issues/678
+      else if (strstr(resolved, "/gpu/hip")) vec_type = VECHIP;
+      else vec_type = VECSTANDARD;
+    }
+  }
+
   // Setup DM
   if (read_mesh) {
     PetscCall(DMPlexCreateFromFile(PETSC_COMM_WORLD, filename, NULL, PETSC_TRUE, &dm));
@@ -104,6 +125,7 @@ int main(int argc, char **argv) {
     // Refine DMPlex with uniform refinement using runtime option -dm_refine
     PetscCall(DMPlexSetRefinementUniform(dm, PETSC_TRUE));
   }
+  PetscCall(DMSetVecType(dm, vec_type));
   PetscCall(DMSetFromOptions(dm));
   // View DMPlex via runtime option
   PetscCall(DMViewFromOptions(dm, NULL, "-dm_view"));
@@ -124,29 +146,6 @@ int main(int argc, char **argv) {
   PetscCall(PetscMalloc1(1, &op_error_ctx));
   PetscCall(MatCreateShell(comm, l_size, l_size, g_size, g_size, op_apply_ctx, &mat_O));
   PetscCall(MatShellSetOperation(mat_O, MATOP_MULT, (void (*)(void))MatMult_Ceed));
-
-  // Set up libCEED
-  CeedInit(ceed_resource, &ceed);
-  CeedMemType mem_type_backend;
-  CeedGetPreferredMemType(ceed, &mem_type_backend);
-
-  PetscCall(DMGetVecType(dm, &vec_type));
-  if (!vec_type) {  // Not yet set by user -dm_vec_type
-    switch (mem_type_backend) {
-      case CEED_MEM_HOST:
-        vec_type = VECSTANDARD;
-        break;
-      case CEED_MEM_DEVICE: {
-        const char *resolved;
-        CeedGetResource(ceed, &resolved);
-        if (strstr(resolved, "/gpu/cuda")) vec_type = VECCUDA;
-        else if (strstr(resolved, "/gpu/hip/occa")) vec_type = VECSTANDARD;  // https://github.com/CEED/libCEED/issues/678
-        else if (strstr(resolved, "/gpu/hip")) vec_type = VECHIP;
-        else vec_type = VECSTANDARD;
-      }
-    }
-    PetscCall(DMSetVecType(dm, vec_type));
-  }
 
   // Print summary
   if (!test_mode) {

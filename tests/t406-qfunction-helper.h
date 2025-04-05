@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -10,11 +10,15 @@
 # pragma  once
 // clang-format on
 
+// Note - ceed/types.h should be used over ceed.h
 #include <ceed.h>
 
 // Test include path with "/./"
 #include "./t406-qfunction-scales.h"
 
-CEED_QFUNCTION_HELPER CeedScalar times_two(CeedScalar x) { return SCALE_TWO * x; }
+// Test include via -I....
+#include <fake-sys-include.h>
 
-CEED_QFUNCTION_HELPER CeedScalar times_three(CeedScalar x) { return SCALE_THREE * x; }
+CEED_QFUNCTION_HELPER CeedScalar times_two(CeedScalar x) { return FAKE_SYS_SCALE_ONE * SCALE_TWO * x; }
+
+CEED_QFUNCTION_HELPER CeedScalar times_three(CeedScalar x) { return FAKE_SYS_SCALE_ONE * SCALE_THREE * x; }

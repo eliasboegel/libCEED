@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -9,7 +9,13 @@
 //! Ceed QFunction. A Ceed Operator connects Ceed ElemRestrictions,
 //! Ceed Bases, and Ceed QFunctions.
 
-use crate::prelude::*;
+use crate::{
+    basis::{Basis, BasisOpt},
+    elem_restriction::{ElemRestriction, ElemRestrictionOpt},
+    prelude::*,
+    qfunction::QFunctionOpt,
+    vector::{Vector, VectorOpt},
+};
 
 // -----------------------------------------------------------------------------
 // Operator Field context wrapper
@@ -27,28 +33,26 @@ pub struct OperatorField<'a> {
 // Implementations
 // -----------------------------------------------------------------------------
 impl<'a> OperatorField<'a> {
-    pub(crate) fn from_raw(
+    pub(crate) unsafe fn from_raw(
         ptr: bind_ceed::CeedOperatorField,
         ceed: crate::Ceed,
     ) -> crate::Result<Self> {
         let vector = {
             let mut vector_ptr = std::ptr::null_mut();
-            let ierr = unsafe { bind_ceed::CeedOperatorFieldGetVector(ptr, &mut vector_ptr) };
-            ceed.check_error(ierr)?;
+            ceed.check_error(bind_ceed::CeedOperatorFieldGetVector(ptr, &mut vector_ptr))?;
             crate::Vector::from_raw(vector_ptr)?
         };
         let elem_restriction = {
             let mut elem_restriction_ptr = std::ptr::null_mut();
-            let ierr = unsafe {
-                bind_ceed::CeedOperatorFieldGetElemRestriction(ptr, &mut elem_restriction_ptr)
-            };
-            ceed.check_error(ierr)?;
+            ceed.check_error(bind_ceed::CeedOperatorFieldGetElemRestriction(
+                ptr,
+                &mut elem_restriction_ptr,
+            ))?;
             crate::ElemRestriction::from_raw(elem_restriction_ptr)?
         };
         let basis = {
             let mut basis_ptr = std::ptr::null_mut();
-            let ierr = unsafe { bind_ceed::CeedOperatorFieldGetBasis(ptr, &mut basis_ptr) };
-            ceed.check_error(ierr)?;
+            ceed.check_error(bind_ceed::CeedOperatorFieldGetBasis(ptr, &mut basis_ptr))?;
             crate::Basis::from_raw(basis_ptr)?
         };
         Ok(Self {
@@ -63,14 +67,14 @@ impl<'a> OperatorField<'a> {
     /// Get the name of an OperatorField
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
     ///
     /// // Operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -110,14 +114,14 @@ impl<'a> OperatorField<'a> {
     /// Get the ElemRestriction of an OperatorField
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
     ///
     /// // Operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -182,14 +186,14 @@ impl<'a> OperatorField<'a> {
     /// Get the Basis of an OperatorField
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
     ///
     /// // Operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -244,14 +248,14 @@ impl<'a> OperatorField<'a> {
     /// Get the Vector of an OperatorField
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
     ///
     /// // Operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -342,14 +346,14 @@ impl<'a> fmt::Display for OperatorCore<'a> {
 /// View an Operator
 ///
 /// ```
-/// # use libceed::prelude::*;
+/// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
 /// # fn main() -> libceed::Result<()> {
 /// # let ceed = libceed::Ceed::default_init();
 /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
 ///
 /// // Operator field arguments
 /// let ne = 3;
-/// let q = 4 as usize;
+/// let q = 4_usize;
 /// let mut ind: Vec<i32> = vec![0; 2 * ne];
 /// for i in 0..ne {
 ///     ind[2 * i + 0] = i as i32;
@@ -382,13 +386,13 @@ impl<'a> fmt::Display for Operator<'a> {
 /// View a composite Operator
 ///
 /// ```
-/// # use libceed::prelude::*;
+/// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
 /// # fn main() -> libceed::Result<()> {
 /// # let ceed = libceed::Ceed::default_init();
 ///
 /// // Sub operator field arguments
 /// let ne = 3;
-/// let q = 4 as usize;
+/// let q = 4_usize;
 /// let mut ind: Vec<i32> = vec![0; 2 * ne];
 /// for i in 0..ne {
 ///     ind[2 * i + 0] = i as i32;
@@ -439,100 +443,94 @@ impl<'a> fmt::Display for CompositeOperator<'a> {
 // Core functionality
 // -----------------------------------------------------------------------------
 impl<'a> OperatorCore<'a> {
+    // Raw Ceed for error handling
+    #[doc(hidden)]
+    fn ceed(&self) -> bind_ceed::Ceed {
+        unsafe { bind_ceed::CeedOperatorReturnCeed(self.ptr) }
+    }
+
     // Error handling
     #[doc(hidden)]
     fn check_error(&self, ierr: i32) -> crate::Result<i32> {
-        let mut ptr = std::ptr::null_mut();
-        unsafe {
-            bind_ceed::CeedOperatorGetCeed(self.ptr, &mut ptr);
-        }
-        crate::check_error(ptr, ierr)
+        crate::check_error(|| self.ceed(), ierr)
     }
 
     // Common implementations
     pub fn check(&self) -> crate::Result<i32> {
-        let ierr = unsafe { bind_ceed::CeedOperatorCheckReady(self.ptr) };
-        self.check_error(ierr)
+        self.check_error(unsafe { bind_ceed::CeedOperatorCheckReady(self.ptr) })
     }
 
     pub fn name(&self, name: &str) -> crate::Result<i32> {
         let name_c = CString::new(name).expect("CString::new failed");
-        let ierr = unsafe { bind_ceed::CeedOperatorSetName(self.ptr, name_c.as_ptr()) };
-        self.check_error(ierr)
+        self.check_error(unsafe { bind_ceed::CeedOperatorSetName(self.ptr, name_c.as_ptr()) })
     }
 
     pub fn apply(&self, input: &Vector, output: &mut Vector) -> crate::Result<i32> {
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedOperatorApply(
                 self.ptr,
                 input.ptr,
                 output.ptr,
                 bind_ceed::CEED_REQUEST_IMMEDIATE,
             )
-        };
-        self.check_error(ierr)
+        })
     }
 
     pub fn apply_add(&self, input: &Vector, output: &mut Vector) -> crate::Result<i32> {
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedOperatorApplyAdd(
                 self.ptr,
                 input.ptr,
                 output.ptr,
                 bind_ceed::CEED_REQUEST_IMMEDIATE,
             )
-        };
-        self.check_error(ierr)
+        })
     }
 
     pub fn linear_assemble_diagonal(&self, assembled: &mut Vector) -> crate::Result<i32> {
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedOperatorLinearAssembleDiagonal(
                 self.ptr,
                 assembled.ptr,
                 bind_ceed::CEED_REQUEST_IMMEDIATE,
             )
-        };
-        self.check_error(ierr)
+        })
     }
 
     pub fn linear_assemble_add_diagonal(&self, assembled: &mut Vector) -> crate::Result<i32> {
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedOperatorLinearAssembleAddDiagonal(
                 self.ptr,
                 assembled.ptr,
                 bind_ceed::CEED_REQUEST_IMMEDIATE,
             )
-        };
-        self.check_error(ierr)
+        })
     }
 
     pub fn linear_assemble_point_block_diagonal(
         &self,
         assembled: &mut Vector,
     ) -> crate::Result<i32> {
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedOperatorLinearAssemblePointBlockDiagonal(
                 self.ptr,
                 assembled.ptr,
                 bind_ceed::CEED_REQUEST_IMMEDIATE,
             )
-        };
-        self.check_error(ierr)
+        })
     }
 
     pub fn linear_assemble_add_point_block_diagonal(
         &self,
         assembled: &mut Vector,
     ) -> crate::Result<i32> {
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedOperatorLinearAssembleAddPointBlockDiagonal(
                 self.ptr,
                 assembled.ptr,
                 bind_ceed::CEED_REQUEST_IMMEDIATE,
             )
-        };
-        self.check_error(ierr)
+        })
     }
 }
 
@@ -548,7 +546,7 @@ impl<'a> Operator<'a> {
         dqfT: impl Into<QFunctionOpt<'b>>,
     ) -> crate::Result<Self> {
         let mut ptr = std::ptr::null_mut();
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedOperatorCreate(
                 ceed.ptr,
                 qf.into().to_raw(),
@@ -556,8 +554,7 @@ impl<'a> Operator<'a> {
                 dqfT.into().to_raw(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             op_core: OperatorCore {
                 ptr,
@@ -566,7 +563,7 @@ impl<'a> Operator<'a> {
         })
     }
 
-    fn from_raw(ptr: bind_ceed::CeedOperator) -> crate::Result<Self> {
+    unsafe fn from_raw(ptr: bind_ceed::CeedOperator) -> crate::Result<Self> {
         Ok(Self {
             op_core: OperatorCore {
                 ptr,
@@ -580,14 +577,14 @@ impl<'a> Operator<'a> {
     /// * 'name' - Name to set
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
     ///
     /// // Operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -621,7 +618,7 @@ impl<'a> Operator<'a> {
     /// * `output` - Output Vector
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -699,7 +696,7 @@ impl<'a> Operator<'a> {
     /// * `output` - Output Vector
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -779,7 +776,7 @@ impl<'a> Operator<'a> {
     ///
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
@@ -811,8 +808,8 @@ impl<'a> Operator<'a> {
         v: impl Into<VectorOpt<'b>>,
     ) -> crate::Result<Self> {
         let fieldname = CString::new(fieldname).expect("CString::new failed");
-        let fieldname = fieldname.as_ptr() as *const i8;
-        let ierr = unsafe {
+        let fieldname = fieldname.as_ptr();
+        self.op_core.check_error(unsafe {
             bind_ceed::CeedOperatorSetField(
                 self.op_core.ptr,
                 fieldname,
@@ -820,22 +817,21 @@ impl<'a> Operator<'a> {
                 b.into().to_raw(),
                 v.into().to_raw(),
             )
-        };
-        self.op_core.check_error(ierr)?;
+        })?;
         Ok(self)
     }
 
     /// Get a slice of Operator inputs
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
     ///
     /// // Operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -864,16 +860,15 @@ impl<'a> Operator<'a> {
         // Get array of raw C pointers for inputs
         let mut num_inputs = 0;
         let mut inputs_ptr = std::ptr::null_mut();
-        let ierr = unsafe {
+        self.op_core.check_error(unsafe {
             bind_ceed::CeedOperatorGetFields(
                 self.op_core.ptr,
                 &mut num_inputs,
                 &mut inputs_ptr,
                 std::ptr::null_mut() as *mut bind_ceed::CeedInt,
-                std::ptr::null_mut() as *mut *mut bind_ceed::CeedOperatorField,
+                std::ptr::null_mut(),
             )
-        };
-        self.op_core.check_error(ierr)?;
+        })?;
         // Convert raw C pointers to fixed length slice
         let inputs_slice = unsafe {
             std::slice::from_raw_parts(
@@ -883,16 +878,15 @@ impl<'a> Operator<'a> {
         };
         // And finally build vec
         let ceed = {
+            let ceed_raw = self.op_core.ceed();
             let mut ptr = std::ptr::null_mut();
-            let mut ptr_copy = std::ptr::null_mut();
             unsafe {
-                bind_ceed::CeedOperatorGetCeed(self.op_core.ptr, &mut ptr);
-                bind_ceed::CeedReferenceCopy(ptr, &mut ptr_copy); // refcount
+                bind_ceed::CeedReferenceCopy(ceed_raw, &mut ptr); // refcount
             }
             crate::Ceed { ptr }
         };
         let inputs = (0..num_inputs as usize)
-            .map(|i| crate::OperatorField::from_raw(inputs_slice[i], ceed.clone()))
+            .map(|i| unsafe { crate::OperatorField::from_raw(inputs_slice[i], ceed.clone()) })
             .collect::<crate::Result<Vec<_>>>()?;
         Ok(inputs)
     }
@@ -900,14 +894,14 @@ impl<'a> Operator<'a> {
     /// Get a slice of Operator outputs
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
     ///
     /// // Operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -936,16 +930,15 @@ impl<'a> Operator<'a> {
         // Get array of raw C pointers for outputs
         let mut num_outputs = 0;
         let mut outputs_ptr = std::ptr::null_mut();
-        let ierr = unsafe {
+        self.op_core.check_error(unsafe {
             bind_ceed::CeedOperatorGetFields(
                 self.op_core.ptr,
                 std::ptr::null_mut() as *mut bind_ceed::CeedInt,
-                std::ptr::null_mut() as *mut *mut bind_ceed::CeedOperatorField,
+                std::ptr::null_mut(),
                 &mut num_outputs,
                 &mut outputs_ptr,
             )
-        };
-        self.op_core.check_error(ierr)?;
+        })?;
         // Convert raw C pointers to fixed length slice
         let outputs_slice = unsafe {
             std::slice::from_raw_parts(
@@ -955,16 +948,15 @@ impl<'a> Operator<'a> {
         };
         // And finally build vec
         let ceed = {
+            let ceed_raw = self.op_core.ceed();
             let mut ptr = std::ptr::null_mut();
-            let mut ptr_copy = std::ptr::null_mut();
             unsafe {
-                bind_ceed::CeedOperatorGetCeed(self.op_core.ptr, &mut ptr);
-                bind_ceed::CeedReferenceCopy(ptr, &mut ptr_copy); // refcount
+                bind_ceed::CeedReferenceCopy(ceed_raw, &mut ptr); // refcount
             }
             crate::Ceed { ptr }
         };
         let outputs = (0..num_outputs as usize)
-            .map(|i| crate::OperatorField::from_raw(outputs_slice[i], ceed.clone()))
+            .map(|i| unsafe { crate::OperatorField::from_raw(outputs_slice[i], ceed.clone()) })
             .collect::<crate::Result<Vec<_>>>()?;
         Ok(outputs)
     }
@@ -972,7 +964,7 @@ impl<'a> Operator<'a> {
     /// Check if Operator is setup correctly
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -1015,7 +1007,7 @@ impl<'a> Operator<'a> {
     ///
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
@@ -1052,7 +1044,7 @@ impl<'a> Operator<'a> {
     ///
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;
@@ -1099,7 +1091,7 @@ impl<'a> Operator<'a> {
     /// * `assembled` - Vector to store assembled Operator diagonal
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -1206,7 +1198,7 @@ impl<'a> Operator<'a> {
     ///
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -1318,7 +1310,7 @@ impl<'a> Operator<'a> {
     ///                   `[nodes, component out, component in]`.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, EvalMode, MemType, QFunctionInputs, QFunctionOpt, QFunctionOutputs, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -1457,7 +1449,7 @@ impl<'a> Operator<'a> {
     ///                   `[nodes, component out, component in]`.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, EvalMode, MemType, QFunctionInputs, QFunctionOpt, QFunctionOutputs, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -1589,7 +1581,7 @@ impl<'a> Operator<'a> {
     /// * `basis_coarse` - Coarse grid active vector basis
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 15;
@@ -1722,7 +1714,7 @@ impl<'a> Operator<'a> {
         let mut ptr_coarse = std::ptr::null_mut();
         let mut ptr_prolong = std::ptr::null_mut();
         let mut ptr_restrict = std::ptr::null_mut();
-        let ierr = unsafe {
+        self.op_core.check_error(unsafe {
             bind_ceed::CeedOperatorMultigridLevelCreate(
                 self.op_core.ptr,
                 p_mult_fine.ptr,
@@ -1732,11 +1724,10 @@ impl<'a> Operator<'a> {
                 &mut ptr_prolong,
                 &mut ptr_restrict,
             )
-        };
-        self.op_core.check_error(ierr)?;
-        let op_coarse = Operator::from_raw(ptr_coarse)?;
-        let op_prolong = Operator::from_raw(ptr_prolong)?;
-        let op_restrict = Operator::from_raw(ptr_restrict)?;
+        })?;
+        let op_coarse = unsafe { Operator::from_raw(ptr_coarse)? };
+        let op_prolong = unsafe { Operator::from_raw(ptr_prolong)? };
+        let op_restrict = unsafe { Operator::from_raw(ptr_restrict)? };
         Ok((op_coarse, op_prolong, op_restrict))
     }
 
@@ -1749,7 +1740,7 @@ impl<'a> Operator<'a> {
     /// * `interp_c_to_f` - Matrix for coarse to fine
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, EvalMode, MemType, QFunctionOpt, QuadMode, Scalar, TransposeMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 15;
@@ -1907,12 +1898,12 @@ impl<'a> Operator<'a> {
         p_mult_fine: &Vector,
         rstr_coarse: &ElemRestriction,
         basis_coarse: &Basis,
-        interpCtoF: &Vec<Scalar>,
+        interpCtoF: &[crate::Scalar],
     ) -> crate::Result<(Operator<'b>, Operator<'b>, Operator<'b>)> {
         let mut ptr_coarse = std::ptr::null_mut();
         let mut ptr_prolong = std::ptr::null_mut();
         let mut ptr_restrict = std::ptr::null_mut();
-        let ierr = unsafe {
+        self.op_core.check_error(unsafe {
             bind_ceed::CeedOperatorMultigridLevelCreateTensorH1(
                 self.op_core.ptr,
                 p_mult_fine.ptr,
@@ -1923,11 +1914,10 @@ impl<'a> Operator<'a> {
                 &mut ptr_prolong,
                 &mut ptr_restrict,
             )
-        };
-        self.op_core.check_error(ierr)?;
-        let op_coarse = Operator::from_raw(ptr_coarse)?;
-        let op_prolong = Operator::from_raw(ptr_prolong)?;
-        let op_restrict = Operator::from_raw(ptr_restrict)?;
+        })?;
+        let op_coarse = unsafe { Operator::from_raw(ptr_coarse)? };
+        let op_prolong = unsafe { Operator::from_raw(ptr_prolong)? };
+        let op_restrict = unsafe { Operator::from_raw(ptr_restrict)? };
         Ok((op_coarse, op_prolong, op_restrict))
     }
 
@@ -1940,7 +1930,7 @@ impl<'a> Operator<'a> {
     /// * `interp_c_to_f` - Matrix for coarse to fine
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, EvalMode, MemType, QFunctionOpt, QuadMode, Scalar, TransposeMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 15;
@@ -2098,12 +2088,12 @@ impl<'a> Operator<'a> {
         p_mult_fine: &Vector,
         rstr_coarse: &ElemRestriction,
         basis_coarse: &Basis,
-        interpCtoF: &[Scalar],
+        interpCtoF: &[crate::Scalar],
     ) -> crate::Result<(Operator<'b>, Operator<'b>, Operator<'b>)> {
         let mut ptr_coarse = std::ptr::null_mut();
         let mut ptr_prolong = std::ptr::null_mut();
         let mut ptr_restrict = std::ptr::null_mut();
-        let ierr = unsafe {
+        self.op_core.check_error(unsafe {
             bind_ceed::CeedOperatorMultigridLevelCreateH1(
                 self.op_core.ptr,
                 p_mult_fine.ptr,
@@ -2114,11 +2104,10 @@ impl<'a> Operator<'a> {
                 &mut ptr_prolong,
                 &mut ptr_restrict,
             )
-        };
-        self.op_core.check_error(ierr)?;
-        let op_coarse = Operator::from_raw(ptr_coarse)?;
-        let op_prolong = Operator::from_raw(ptr_prolong)?;
-        let op_restrict = Operator::from_raw(ptr_restrict)?;
+        })?;
+        let op_coarse = unsafe { Operator::from_raw(ptr_coarse)? };
+        let op_prolong = unsafe { Operator::from_raw(ptr_prolong)? };
+        let op_restrict = unsafe { Operator::from_raw(ptr_restrict)? };
         Ok((op_coarse, op_prolong, op_restrict))
     }
 }
@@ -2130,8 +2119,7 @@ impl<'a> CompositeOperator<'a> {
     // Constructor
     pub fn create(ceed: &crate::Ceed) -> crate::Result<Self> {
         let mut ptr = std::ptr::null_mut();
-        let ierr = unsafe { bind_ceed::CeedCompositeOperatorCreate(ceed.ptr, &mut ptr) };
-        ceed.check_error(ierr)?;
+        ceed.check_error(unsafe { bind_ceed::CeedCompositeOperatorCreate(ceed.ptr, &mut ptr) })?;
         Ok(Self {
             op_core: OperatorCore {
                 ptr,
@@ -2145,13 +2133,13 @@ impl<'a> CompositeOperator<'a> {
     /// * 'name' - Name to set
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     ///
     /// // Sub operator field arguments
     /// let ne = 3;
-    /// let q = 4 as usize;
+    /// let q = 4_usize;
     /// let mut ind: Vec<i32> = vec![0; 2 * ne];
     /// for i in 0..ne {
     ///     ind[2 * i + 0] = i as i32;
@@ -2202,7 +2190,7 @@ impl<'a> CompositeOperator<'a> {
     /// * `output` - Output Vector
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -2299,7 +2287,7 @@ impl<'a> CompositeOperator<'a> {
     /// * `output` - Output Vector
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, Scalar, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;
@@ -2395,7 +2383,7 @@ impl<'a> CompositeOperator<'a> {
     /// * `subop` - Sub-Operator
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QFunctionOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let mut op = ceed.composite_operator()?;
@@ -2412,16 +2400,16 @@ impl<'a> CompositeOperator<'a> {
     /// ```
     #[allow(unused_mut)]
     pub fn sub_operator(mut self, subop: &Operator) -> crate::Result<Self> {
-        let ierr =
-            unsafe { bind_ceed::CeedCompositeOperatorAddSub(self.op_core.ptr, subop.op_core.ptr) };
-        self.op_core.check_error(ierr)?;
+        self.op_core.check_error(unsafe {
+            bind_ceed::CeedCompositeOperatorAddSub(self.op_core.ptr, subop.op_core.ptr)
+        })?;
         Ok(self)
     }
 
     /// Check if CompositeOperator is setup correctly
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, ElemRestrictionOpt, MemType, QFunctionOpt, QuadMode, VectorOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ne = 4;

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -91,7 +91,7 @@ PetscErrorCode BCDefinitionGetEssential(BCDefinition bc_def, PetscInt *num_essen
 #define LABEL_ARRAY_SIZE 256
 
 // @brief See `PetscOptionsBCDefinition`
-PetscErrorCode PetscOptionsBCDefinition_Private(PetscOptionItems *PetscOptionsObject, const char opt[], const char text[], const char man[],
+PetscErrorCode PetscOptionsBCDefinition_Private(PetscOptionItems PetscOptionsObject, const char opt[], const char text[], const char man[],
                                                 const char name[], BCDefinition *bc_def, PetscBool *set) {
   PetscInt num_label_values = LABEL_ARRAY_SIZE, label_values[LABEL_ARRAY_SIZE] = {0};
 

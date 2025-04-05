@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -8,8 +8,7 @@
 /**
   @brief Ceed QFunction for building the geometric data for the 3D Poisson operator
 **/
-
-#include <ceed.h>
+#include <ceed/types.h>
 
 CEED_QFUNCTION(Poisson3DBuild)(void *ctx, const CeedInt Q, const CeedScalar *const *in, CeedScalar *const *out) {
   // At every quadrature point, compute w/det(J).adj(J).adj(J)^T and store the symmetric part of the result.

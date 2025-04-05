@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -403,6 +403,7 @@ int main(int argc, char **argv) {
       break;
     case CEED_MEM_DEVICE: {
       const char *resolved;
+
       CeedGetResource(ceed, &resolved);
       if (strstr(resolved, "/gpu/cuda")) default_vec_type = VECCUDA;
       else if (strstr(resolved, "/gpu/hip/occa")) default_vec_type = VECSTANDARD;  // https://github.com/CEED/libCEED/issues/678

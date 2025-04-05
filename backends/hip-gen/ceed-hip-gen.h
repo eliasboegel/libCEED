@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -12,9 +12,11 @@
 #include <hip/hip_runtime.h>
 
 typedef struct {
+  bool          use_fallback;
   CeedInt       dim;
-  CeedInt       Q_1d;
+  CeedInt       Q, Q_1d;
   CeedInt       max_P_1d;
+  CeedInt       thread_1d;
   hipModule_t   module;
   hipFunction_t op;
   FieldsInt_Hip indices;
@@ -22,11 +24,11 @@ typedef struct {
   Fields_Hip    B;
   Fields_Hip    G;
   CeedScalar   *W;
+  Points_Hip    points;
 } CeedOperator_Hip_gen;
 
 typedef struct {
   const char *qfunction_name;
-  const char *qfunction_source;
   void       *d_c;
 } CeedQFunction_Hip_gen;
 

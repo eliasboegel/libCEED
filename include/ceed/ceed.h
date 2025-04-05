@@ -1,4 +1,4 @@
-/// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+/// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 /// All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 ///
 /// SPDX-License-Identifier: BSD-2-Clause
@@ -107,6 +107,7 @@ CEED_EXTERN int CeedReferenceCopy(Ceed ceed, Ceed *ceed_copy);
 CEED_EXTERN int CeedGetResource(Ceed ceed, const char **resource);
 CEED_EXTERN int CeedIsDeterministic(Ceed ceed, bool *is_deterministic);
 CEED_EXTERN int CeedAddJitSourceRoot(Ceed ceed, const char *jit_source_root);
+CEED_EXTERN int CeedAddJitDefine(Ceed ceed, const char *jit_define);
 CEED_EXTERN int CeedView(Ceed ceed, FILE *stream);
 CEED_EXTERN int CeedDestroy(Ceed *ceed);
 CEED_EXTERN int CeedErrorImpl(Ceed ceed, const char *filename, int lineno, const char *func, int ecode, const char *format, ...);
@@ -162,6 +163,8 @@ CEED_EXTERN int CeedErrorExit(Ceed ceed, const char *filename, int line_no, cons
     (CEED_VERSION_MAJOR == major && (CEED_VERSION_MINOR > minor || (CEED_VERSION_MINOR == minor && CEED_VERSION_PATCH >= patch)))))
 
 CEED_EXTERN int CeedGetVersion(int *major, int *minor, int *patch, bool *release);
+CEED_EXTERN int CeedGetGitVersion(const char **git_version);
+CEED_EXTERN int CeedGetBuildConfiguration(const char **build_config);
 
 CEED_EXTERN int CeedGetScalarType(CeedScalarType *scalar_type);
 
@@ -180,10 +183,10 @@ CEED_EXTERN int CeedGetPreferredMemType(Ceed ceed, CeedMemType *type);
 CEED_EXTERN int  CeedVectorCreate(Ceed ceed, CeedSize len, CeedVector *vec);
 CEED_EXTERN int  CeedVectorReferenceCopy(CeedVector vec, CeedVector *vec_copy);
 CEED_EXTERN int  CeedVectorCopy(CeedVector vec, CeedVector vec_copy);
-CEED_EXTERN int  CeedVectorCopyStrided(CeedVector vec, CeedSize start, CeedInt step, CeedVector vec_copy);
+CEED_EXTERN int  CeedVectorCopyStrided(CeedVector vec, CeedSize start, CeedSize stop, CeedSize step, CeedVector vec_copy);
 CEED_EXTERN int  CeedVectorSetArray(CeedVector vec, CeedMemType mem_type, CeedCopyMode copy_mode, CeedScalar *array);
 CEED_EXTERN int  CeedVectorSetValue(CeedVector vec, CeedScalar value);
-CEED_EXTERN int  CeedVectorSetValueStrided(CeedVector vec, CeedSize start, CeedInt step, CeedScalar value);
+CEED_EXTERN int  CeedVectorSetValueStrided(CeedVector vec, CeedSize start, CeedSize stop, CeedSize step, CeedScalar value);
 CEED_EXTERN int  CeedVectorSyncArray(CeedVector vec, CeedMemType mem_type);
 CEED_EXTERN int  CeedVectorTakeArray(CeedVector vec, CeedMemType mem_type, CeedScalar **array);
 CEED_EXTERN int  CeedVectorGetArray(CeedVector vec, CeedMemType mem_type, CeedScalar **array);
@@ -278,6 +281,8 @@ CEED_EXTERN int  CeedElemRestrictionGetElementSize(CeedElemRestriction rstr, Cee
 CEED_EXTERN int  CeedElemRestrictionGetNumPoints(CeedElemRestriction rstr, CeedInt *num_points);
 CEED_EXTERN int  CeedElemRestrictionGetNumPointsInElement(CeedElemRestriction rstr, CeedInt elem, CeedInt *num_points);
 CEED_EXTERN int  CeedElemRestrictionGetMaxPointsInElement(CeedElemRestriction rstr, CeedInt *max_points);
+CEED_EXTERN int  CeedElemRestrictionGetMinPointsInElement(CeedElemRestriction rstr, CeedInt *min_points);
+CEED_EXTERN int  CeedElemRestrictionGetMinMaxPointsInElement(CeedElemRestriction rstr, CeedInt *min_points, CeedInt *max_points);
 CEED_EXTERN int  CeedElemRestrictionGetLVectorSize(CeedElemRestriction rstr, CeedSize *l_size);
 CEED_EXTERN int  CeedElemRestrictionGetEVectorSize(CeedElemRestriction rstr, CeedSize *e_size);
 CEED_EXTERN int  CeedElemRestrictionGetNumComponents(CeedElemRestriction rstr, CeedInt *num_comp);

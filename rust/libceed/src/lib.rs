@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -19,18 +19,6 @@ use crate::prelude::*;
 use std::sync::Once;
 
 pub mod prelude {
-    pub use crate::{
-        basis::{self, Basis, BasisOpt},
-        elem_restriction::{self, ElemRestriction, ElemRestrictionOpt},
-        operator::{self, CompositeOperator, Operator, OperatorField},
-        qfunction::{
-            self, QFunction, QFunctionByName, QFunctionField, QFunctionInputs, QFunctionOpt,
-            QFunctionOutputs,
-        },
-        vector::{self, Vector, VectorOpt, VectorSliceWrapper},
-        ElemTopology, EvalMode, MemType, NormType, QuadMode, Scalar, TransposeMode,
-        CEED_STRIDES_BACKEND, EPSILON, MAX_QFUNCTION_FIELDS,
-    };
     pub(crate) use libceed_sys::bind_ceed;
     pub(crate) use std::convert::TryFrom;
     pub(crate) use std::ffi::{CStr, CString};
@@ -158,10 +146,26 @@ impl fmt::Display for Error {
 }
 
 // -----------------------------------------------------------------------------
+// Internal crate contents
+// -----------------------------------------------------------------------------
+pub use crate::{
+    basis::{Basis, BasisOpt},
+    elem_restriction::{ElemRestriction, ElemRestrictionOpt},
+    operator::{CompositeOperator, Operator, OperatorField},
+    qfunction::{
+        QFunction, QFunctionByName, QFunctionField, QFunctionInputs, QFunctionOpt, QFunctionOutputs,
+    },
+    vector::{Vector, VectorOpt, VectorSliceWrapper},
+};
+
+// -----------------------------------------------------------------------------
 // Internal error checker
 // -----------------------------------------------------------------------------
 #[doc(hidden)]
-pub(crate) fn check_error(ceed_ptr: bind_ceed::Ceed, ierr: i32) -> Result<i32> {
+pub(crate) fn check_error<F>(ceed_ptr: F, ierr: i32) -> Result<i32>
+where
+    F: FnOnce() -> bind_ceed::Ceed,
+{
     // Return early if code is clean
     if ierr == bind_ceed::CeedErrorType_CEED_ERROR_SUCCESS {
         return Ok(ierr);
@@ -169,7 +173,7 @@ pub(crate) fn check_error(ceed_ptr: bind_ceed::Ceed, ierr: i32) -> Result<i32> {
     // Retrieve error message
     let mut ptr: *const std::os::raw::c_char = std::ptr::null_mut();
     let c_str = unsafe {
-        bind_ceed::CeedGetErrorMessage(ceed_ptr, &mut ptr);
+        bind_ceed::CeedGetErrorMessage(ceed_ptr(), &mut ptr);
         std::ffi::CStr::from_ptr(ptr)
     };
     let message = c_str.to_string_lossy().to_string();
@@ -225,8 +229,8 @@ impl Clone for Ceed {
     /// ```
     fn clone(&self) -> Self {
         let mut ptr_clone = std::ptr::null_mut();
-        let ierr = unsafe { bind_ceed::CeedReferenceCopy(self.ptr, &mut ptr_clone) };
-        self.check_error(ierr).expect("failed to clone Ceed");
+        self.check_error(unsafe { bind_ceed::CeedReferenceCopy(self.ptr, &mut ptr_clone) })
+            .expect("failed to clone Ceed");
         Self { ptr: ptr_clone }
     }
 }
@@ -305,7 +309,7 @@ impl Ceed {
 
         // Call to libCEED
         let mut ptr = std::ptr::null_mut();
-        let mut ierr = unsafe { bind_ceed::CeedInit(c_resource.as_ptr() as *const i8, &mut ptr) };
+        let mut ierr = unsafe { bind_ceed::CeedInit(c_resource.as_ptr(), &mut ptr) };
         if ierr != 0 {
             panic!("Error initializing backend resource: {}", resource)
         }
@@ -424,7 +428,7 @@ impl Ceed {
     ///                    `[0, lsize - 1]`.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -437,6 +441,7 @@ impl Ceed {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn elem_restriction<'a>(
         &self,
         nelem: usize,
@@ -483,7 +488,7 @@ impl Ceed {
     ///                    orientation.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -500,6 +505,7 @@ impl Ceed {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn oriented_elem_restriction<'a>(
         &self,
         nelem: usize,
@@ -547,7 +553,7 @@ impl Ceed {
     ///                     unknowns upon restriction.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -586,6 +592,7 @@ impl Ceed {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn curl_oriented_elem_restriction<'a>(
         &self,
         nelem: usize,
@@ -687,6 +694,7 @@ impl Ceed {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn basis_tensor_H1<'a>(
         &self,
         dim: usize,
@@ -716,7 +724,7 @@ impl Ceed {
     ///               accuracy for the quadrature)
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let b = ceed.basis_tensor_H1_Lagrange(2, 1, 3, 4, QuadMode::Gauss)?;
@@ -752,7 +760,7 @@ impl Ceed {
     ///                 the reference element
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, ElemTopology};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let interp = [
@@ -849,6 +857,7 @@ impl Ceed {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn basis_H1<'a>(
         &self,
         topo: ElemTopology,
@@ -883,7 +892,7 @@ impl Ceed {
     ///                 the reference element
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, ElemTopology};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let interp = [
@@ -947,6 +956,7 @@ impl Ceed {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn basis_Hdiv<'a>(
         &self,
         topo: ElemTopology,
@@ -980,7 +990,7 @@ impl Ceed {
     ///                 the reference element
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, ElemTopology};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let interp = [
@@ -1041,6 +1051,7 @@ impl Ceed {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn basis_Hcurl<'a>(
         &self,
         topo: ElemTopology,
@@ -1074,7 +1085,7 @@ impl Ceed {
     /// * `f`       - Boxed closure to evaluate weak form at quadrature points.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QFunctionInputs, QFunctionOutputs};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let mut user_f = |[u, weights, ..]: QFunctionInputs, [v, ..]: QFunctionOutputs| {
@@ -1132,7 +1143,7 @@ impl Ceed {
     ///              Jacobian of the qf (or qfunction_none)
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QFunctionOpt};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let qf = ceed.q_function_interior_by_name("Mass1DBuild")?;

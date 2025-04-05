@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -398,7 +398,7 @@ PetscErrorCode DMSwarmInterpolateFromCellToSwarm_Petsc(DM dm_swarm, const char *
     PetscCall(DMRestoreWorkArray(dm_mesh, num_points_in_cell * dim, MPIU_REAL, &coords_points_cell_true));
     PetscCall(DMRestoreWorkArray(dm_mesh, num_points_in_cell * dim, MPIU_REAL, &coords_points_cell_ref));
     PetscCall(PetscTabulationDestroy(&tabulation));
-    PetscCall(PetscFree(points_cell));
+    PetscCall(DMSwarmSortRestorePointsPerCell(dm_swarm, cell, &num_points_in_cell, &points_cell));
   }
 
   // Cleanup
@@ -486,7 +486,7 @@ PetscErrorCode DMSwarmCheckSwarmValues(DM dm_swarm, const char *field, PetscScal
     }
 
     // -- Cleanup
-    PetscCall(PetscFree(points));
+    PetscCall(DMSwarmSortRestorePointsPerCell(dm_swarm, cell, &num_points_in_cell, &points));
   }
 
   // Cleanup

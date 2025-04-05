@@ -11,7 +11,10 @@ On this page we provide a summary of the main API changes, new features and exam
 - Add `bool` field type for `CeedQFunctionContext` and related interfaces to use `bool` fields.
 - `CEED_BASIS_COLLOCATED` removed; users should only use `CEED_BASIS_NONE`.
 - Remove unneeded pointer for `CeedElemRestrictionGetELayout`.
-- Require use of `Ceed*Destroy()` on Ceed objects returned from `CeedOperatorFieldGet*()`;
+- Change QFunction source include file handling in JiT compilers
+    - Add `CEED_RUNNING_JIT_PASS` compiler definition for wrapping header files that device JiT compilers cannot read
+    - Users should now prefer `#include <ceed/types.h>` rather than `#include <ceed.h>` in QFunction source files
+- Require use of `Ceed*Destroy()` on Ceed objects returned from `Ceed*Get*()`.
 
 ### New features
 
@@ -19,6 +22,12 @@ On this page we provide a summary of the main API changes, new features and exam
 - Add `CeedElemRestrictionGetLLayout` to provide L-vector layout for strided `CeedElemRestriction` created with `CEED_BACKEND_STRIDES`.
 - Add `CeedVectorReturnCeed` and similar when parent `Ceed` context for a libCEED object is only needed once in a calling scope.
 - Enable `#pragma once` for all JiT source; remove duplicate includes in JiT source string before compilation.
+- Allow user to set additional compiler options for CUDA and HIP JiT.
+Specifically, directories set with `CeedAddJitSourceRoot(ceed, "foo/bar")` will be used to set `-Ifoo/bar` and defines set with `CeedAddJitDefine(ceed, "foo=bar")` will be used to set `-Dfoo=bar`.
+- Added non-tensor basis support to code generation backends `/gpu/cuda/gen` and `/gpu/hip/gen`.
+- Added support to code generation backends `/gpu/cuda/gen` and `/gpu/hip/gen` for operators with both tensor and non-tensor bases.
+- Add `CeedGetGitVersion()` to access the Git commit and dirty state of the repository at build time.
+- Add `CeedGetBuildConfiguration()` to access compilers, flags, and related information about the build environment.
 
 ### Examples
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -60,6 +60,7 @@ static int CeedQFunctionApply_Hip(CeedQFunction qf, CeedInt Q, CeedVector *U, Ce
 
   // Restore context
   CeedCallBackend(CeedQFunctionRestoreInnerContextData(qf, &data->d_c));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -70,7 +71,6 @@ static int CeedQFunctionDestroy_Hip(CeedQFunction qf) {
   CeedQFunction_Hip *data;
 
   CeedCallBackend(CeedQFunctionGetData(qf, &data));
-  CeedCallBackend(CeedFree(&data->qfunction_source));
   if (data->module) CeedCallHip(CeedQFunctionReturnCeed(qf), hipModuleUnload(data->module));
   CeedCallBackend(CeedFree(&data));
   return CEED_ERROR_SUCCESS;
@@ -89,15 +89,12 @@ int CeedQFunctionCreate_Hip(CeedQFunction qf) {
   CeedCallBackend(CeedQFunctionSetData(qf, data));
   CeedCallBackend(CeedQFunctionGetNumArgs(qf, &num_input_fields, &num_output_fields));
 
-  // Read QFunction source
   CeedCallBackend(CeedQFunctionGetKernelName(qf, &data->qfunction_name));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading QFunction User Source -----\n");
-  CeedCallBackend(CeedQFunctionLoadSourceToBuffer(qf, &data->qfunction_source));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading QFunction User Source Complete! -----\n");
 
   // Register backend functions
   CeedCallBackend(CeedSetBackendFunction(ceed, "QFunction", qf, "Apply", CeedQFunctionApply_Hip));
   CeedCallBackend(CeedSetBackendFunction(ceed, "QFunction", qf, "Destroy", CeedQFunctionDestroy_Hip));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 

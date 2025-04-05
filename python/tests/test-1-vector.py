@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors
+# Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors
 # All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 #
 # SPDX-License-Identifier: BSD-2-Clause
@@ -359,7 +359,7 @@ def test_126(ceed_resource, capsys):
     a = np.arange(10, 10 + n, dtype=ceed.scalar_type())
     x.set_array(a, cmode=libceed.USE_POINTER)
 
-    a2 = np.arange(10, n, dtype=ceed.scalar_type())
+    a2 = np.arange(0, n, dtype=ceed.scalar_type())
     y.set_array(a2, cmode=libceed.USE_POINTER)
 
     y.copy_from(x)

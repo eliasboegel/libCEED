@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -36,7 +36,7 @@ PETSC_CEED_EXTERN PetscErrorCode MatCeedContextCreate(DM dm_x, DM dm_y, Vec X_lo
                                                       PetscLogEvent log_event_ceed_mult_transpose, MatCeedContext *ctx);
 PETSC_CEED_EXTERN PetscErrorCode MatCeedContextReference(MatCeedContext ctx);
 PETSC_CEED_EXTERN PetscErrorCode MatCeedContextReferenceCopy(MatCeedContext ctx, MatCeedContext *ctx_copy);
-PETSC_CEED_EXTERN PetscErrorCode MatCeedContextDestroy(MatCeedContext ctx);
+PETSC_CEED_EXTERN PetscErrorCode MatCeedContextDestroy(MatCeedContext *ctx);
 
 // MatCEED
 PETSC_CEED_EXTERN PetscErrorCode MatGetDiagonal_Ceed(Mat A, Vec D);

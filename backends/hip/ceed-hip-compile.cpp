@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -33,12 +33,13 @@
 //------------------------------------------------------------------------------
 // Compile HIP kernel
 //------------------------------------------------------------------------------
-int CeedCompile_Hip(Ceed ceed, const char *source, hipModule_t *module, const CeedInt num_defines, ...) {
+static int CeedCompileCore_Hip(Ceed ceed, const char *source, const bool throw_error, bool *is_compile_good, hipModule_t *module,
+                               const CeedInt num_defines, va_list args) {
   size_t                 ptx_size;
-  char                  *jit_defs_source, *ptx;
-  const char            *jit_defs_path;
-  const int              num_opts = 3;
-  const char            *opts[num_opts];
+  char                  *ptx;
+  const int              num_opts            = 4;
+  CeedInt                num_jit_source_dirs = 0, num_jit_defines = 0;
+  const char           **opts;
   int                    runtime_version;
   hiprtcProgram          prog;
   struct hipDeviceProp_t prop;
@@ -62,8 +63,6 @@ int CeedCompile_Hip(Ceed ceed, const char *source, hipModule_t *module, const Ce
 
   // Kernel specific options, such as kernel constants
   if (num_defines > 0) {
-    va_list args;
-    va_start(args, num_defines);
     char *name;
     int   val;
 
@@ -72,24 +71,48 @@ int CeedCompile_Hip(Ceed ceed, const char *source, hipModule_t *module, const Ce
       val  = va_arg(args, int);
       code << "#define " << name << " " << val << "\n";
     }
-    va_end(args);
   }
 
   // Standard libCEED definitions for HIP backends
-  CeedCallBackend(CeedGetJitAbsolutePath(ceed, "ceed/jit-source/hip/hip-jit.h", &jit_defs_path));
-  CeedCallBackend(CeedLoadSourceToBuffer(ceed, jit_defs_path, &jit_defs_source));
-  code << jit_defs_source;
-  code << "\n\n";
-  CeedCallBackend(CeedFree(&jit_defs_path));
-  CeedCallBackend(CeedFree(&jit_defs_source));
+  code << "#include <ceed/jit-source/hip/hip-jit.h>\n\n";
 
   // Non-macro options
+  CeedCallBackend(CeedCalloc(num_opts, &opts));
   opts[0] = "-default-device";
   CeedCallBackend(CeedGetData(ceed, (void **)&ceed_data));
   CeedCallHip(ceed, hipGetDeviceProperties(&prop, ceed_data->device_id));
   std::string arch_arg = "--gpu-architecture=" + std::string(prop.gcnArchName);
   opts[1]              = arch_arg.c_str();
   opts[2]              = "-munsafe-fp-atomics";
+  opts[3]              = "-DCEED_RUNNING_JIT_PASS=1";
+  // Additional include dirs
+  {
+    const char **jit_source_dirs;
+
+    CeedCallBackend(CeedGetJitSourceRoots(ceed, &num_jit_source_dirs, &jit_source_dirs));
+    CeedCallBackend(CeedRealloc(num_opts + num_jit_source_dirs, &opts));
+    for (CeedInt i = 0; i < num_jit_source_dirs; i++) {
+      std::ostringstream include_dir_arg;
+
+      include_dir_arg << "-I" << jit_source_dirs[i];
+      CeedCallBackend(CeedStringAllocCopy(include_dir_arg.str().c_str(), (char **)&opts[num_opts + i]));
+    }
+    CeedCallBackend(CeedRestoreJitSourceRoots(ceed, &jit_source_dirs));
+  }
+  // User defines
+  {
+    const char **jit_defines;
+
+    CeedCallBackend(CeedGetJitDefines(ceed, &num_jit_defines, &jit_defines));
+    CeedCallBackend(CeedRealloc(num_opts + num_jit_source_dirs + num_jit_defines, &opts));
+    for (CeedInt i = 0; i < num_jit_defines; i++) {
+      std::ostringstream define_arg;
+
+      define_arg << "-D" << jit_defines[i];
+      CeedCallBackend(CeedStringAllocCopy(define_arg.str().c_str(), (char **)&opts[num_opts + num_jit_source_dirs + i]));
+    }
+    CeedCallBackend(CeedRestoreJitDefines(ceed, &jit_defines));
+  }
 
   // Add string source argument provided in call
   code << source;
@@ -98,19 +121,36 @@ int CeedCompile_Hip(Ceed ceed, const char *source, hipModule_t *module, const Ce
   CeedCallHiprtc(ceed, hiprtcCreateProgram(&prog, code.str().c_str(), NULL, 0, NULL, NULL));
 
   // Compile kernel
-  hiprtcResult result = hiprtcCompileProgram(prog, num_opts, opts);
+  CeedDebug256(ceed, CEED_DEBUG_COLOR_ERROR, "---------- ATTEMPTING TO COMPILE JIT SOURCE ----------\n");
+  CeedDebug(ceed, "Source:\n%s\n", code.str().c_str());
+  CeedDebug256(ceed, CEED_DEBUG_COLOR_ERROR, "---------- END OF JIT SOURCE ----------\n");
+  hiprtcResult result = hiprtcCompileProgram(prog, num_opts + num_jit_source_dirs + num_jit_defines, opts);
 
-  if (result != HIPRTC_SUCCESS) {
+  for (CeedInt i = 0; i < num_jit_source_dirs; i++) {
+    CeedCallBackend(CeedFree(&opts[num_opts + i]));
+  }
+  for (CeedInt i = 0; i < num_jit_defines; i++) {
+    CeedCallBackend(CeedFree(&opts[num_opts + num_jit_source_dirs + i]));
+  }
+  CeedCallBackend(CeedFree(&opts));
+  *is_compile_good = result == HIPRTC_SUCCESS;
+  if (!*is_compile_good) {
     size_t log_size;
     char  *log;
 
-    CeedDebug256(ceed, CEED_DEBUG_COLOR_ERROR, "---------- CEED JIT SOURCE FAILED TO COMPILE ----------\n");
-    CeedDebug(ceed, "Source:\n%s\n", code.str().c_str());
-    CeedDebug256(ceed, CEED_DEBUG_COLOR_ERROR, "---------- CEED JIT SOURCE FAILED TO COMPILE ----------\n");
     CeedChk_hiprtc(ceed, hiprtcGetProgramLogSize(prog, &log_size));
     CeedCallBackend(CeedMalloc(log_size, &log));
     CeedCallHiprtc(ceed, hiprtcGetProgramLog(prog, log));
-    return CeedError(ceed, CEED_ERROR_BACKEND, "%s\n%s", hiprtcGetErrorString(result), log);
+    if (throw_error) {
+      return CeedError(ceed, CEED_ERROR_BACKEND, "%s\n%s", hiprtcGetErrorString(result), log);
+    } else {
+      CeedDebug256(ceed, CEED_DEBUG_COLOR_ERROR, "---------- COMPILE ERROR DETECTED ----------\n");
+      CeedDebug(ceed, "Error: %s\nCompile log:\n%s\n", hiprtcGetErrorString(result), log);
+      CeedDebug256(ceed, CEED_DEBUG_COLOR_ERROR, "---------- BACKEND MAY FALLBACK ----------\n");
+      CeedCallBackend(CeedFree(&log));
+      CeedCallHiprtc(ceed, hiprtcDestroyProgram(&prog));
+      return CEED_ERROR_SUCCESS;
+    }
   }
 
   CeedCallHiprtc(ceed, hiprtcGetCodeSize(prog, &ptx_size));
@@ -120,6 +160,29 @@ int CeedCompile_Hip(Ceed ceed, const char *source, hipModule_t *module, const Ce
 
   CeedCallHip(ceed, hipModuleLoadData(module, ptx));
   CeedCallBackend(CeedFree(&ptx));
+  return CEED_ERROR_SUCCESS;
+}
+
+int CeedCompile_Hip(Ceed ceed, const char *source, hipModule_t *module, const CeedInt num_defines, ...) {
+  bool    is_compile_good = true;
+  va_list args;
+
+  va_start(args, num_defines);
+  const CeedInt ierr = CeedCompileCore_Hip(ceed, source, true, &is_compile_good, module, num_defines, args);
+
+  va_end(args);
+  CeedCallBackend(ierr);
+  return CEED_ERROR_SUCCESS;
+}
+
+int CeedTryCompile_Hip(Ceed ceed, const char *source, bool *is_compile_good, hipModule_t *module, const CeedInt num_defines, ...) {
+  va_list args;
+
+  va_start(args, num_defines);
+  const CeedInt ierr = CeedCompileCore_Hip(ceed, source, false, is_compile_good, module, num_defines, args);
+
+  va_end(args);
+  CeedCallBackend(ierr);
   return CEED_ERROR_SUCCESS;
 }
 
@@ -151,9 +214,29 @@ int CeedRunKernelDim_Hip(Ceed ceed, hipFunction_t kernel, const int grid_size, c
 //------------------------------------------------------------------------------
 // Run HIP kernel for spatial dimension with shared memory
 //------------------------------------------------------------------------------
-int CeedRunKernelDimShared_Hip(Ceed ceed, hipFunction_t kernel, const int grid_size, const int block_size_x, const int block_size_y,
-                               const int block_size_z, const int shared_mem_size, void **args) {
-  CeedCallHip(ceed, hipModuleLaunchKernel(kernel, grid_size, 1, 1, block_size_x, block_size_y, block_size_z, shared_mem_size, NULL, args, NULL));
+static int CeedRunKernelDimSharedCore_Hip(Ceed ceed, hipFunction_t kernel, hipStream_t stream, const int grid_size, const int block_size_x,
+                                          const int block_size_y, const int block_size_z, const int shared_mem_size, const bool throw_error,
+                                          bool *is_good_run, void **args) {
+  hipError_t result = hipModuleLaunchKernel(kernel, grid_size, 1, 1, block_size_x, block_size_y, block_size_z, shared_mem_size, stream, args, NULL);
+
+  *is_good_run = result == hipSuccess;
+  if (throw_error) CeedCallHip(ceed, result);
+  return CEED_ERROR_SUCCESS;
+}
+
+int CeedRunKernelDimShared_Hip(Ceed ceed, hipFunction_t kernel, hipStream_t stream, const int grid_size, const int block_size_x,
+                               const int block_size_y, const int block_size_z, const int shared_mem_size, void **args) {
+  bool is_good_run = true;
+
+  CeedCallBackend(CeedRunKernelDimSharedCore_Hip(ceed, kernel, stream, grid_size, block_size_x, block_size_y, block_size_z, shared_mem_size, true,
+                                                 &is_good_run, args));
+  return CEED_ERROR_SUCCESS;
+}
+
+int CeedTryRunKernelDimShared_Hip(Ceed ceed, hipFunction_t kernel, hipStream_t stream, const int grid_size, const int block_size_x,
+                                  const int block_size_y, const int block_size_z, const int shared_mem_size, bool *is_good_run, void **args) {
+  CeedCallBackend(CeedRunKernelDimSharedCore_Hip(ceed, kernel, stream, grid_size, block_size_x, block_size_y, block_size_z, shared_mem_size, false,
+                                                 is_good_run, args));
   return CEED_ERROR_SUCCESS;
 }
 

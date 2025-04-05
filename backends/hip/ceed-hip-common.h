@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -72,6 +72,7 @@ typedef struct {
   hipblasHandle_t        hipblas_handle;
   struct hipDeviceProp_t device_prop;
   int                    opt_block_size;
+  int                    has_unified_addressing;
 } Ceed_Hip;
 
 CEED_INTERN int CeedInit_Hip(Ceed ceed, const char *resource);

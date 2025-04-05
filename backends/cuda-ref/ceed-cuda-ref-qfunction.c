@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -58,6 +58,7 @@ static int CeedQFunctionApply_Cuda(CeedQFunction qf, CeedInt Q, CeedVector *U, C
 
   // Restore context
   CeedCallBackend(CeedQFunctionRestoreInnerContextData(qf, &data->d_c));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -68,7 +69,6 @@ static int CeedQFunctionDestroy_Cuda(CeedQFunction qf) {
   CeedQFunction_Cuda *data;
 
   CeedCallBackend(CeedQFunctionGetData(qf, &data));
-  CeedCallBackend(CeedFree(&data->qfunction_source));
   if (data->module) CeedCallCuda(CeedQFunctionReturnCeed(qf), cuModuleUnload(data->module));
   CeedCallBackend(CeedFree(&data));
   return CEED_ERROR_SUCCESS;
@@ -96,16 +96,13 @@ int CeedQFunctionCreate_Cuda(CeedQFunction qf) {
   CeedCallBackend(CeedCalloc(1, &data));
   CeedCallBackend(CeedQFunctionSetData(qf, data));
 
-  // Read QFunction source
   CeedCallBackend(CeedQFunctionGetKernelName(qf, &data->qfunction_name));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading QFunction User Source -----\n");
-  CeedCallBackend(CeedQFunctionLoadSourceToBuffer(qf, &data->qfunction_source));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading QFunction User Source Complete! -----\n");
 
   // Register backend functions
   CeedCallBackend(CeedSetBackendFunction(ceed, "QFunction", qf, "Apply", CeedQFunctionApply_Cuda));
   CeedCallBackend(CeedSetBackendFunction(ceed, "QFunction", qf, "Destroy", CeedQFunctionDestroy_Cuda));
   CeedCallBackend(CeedSetBackendFunction(ceed, "QFunction", qf, "SetCUDAUserFunction", CeedQFunctionSetCUDAUserFunction_Cuda));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 

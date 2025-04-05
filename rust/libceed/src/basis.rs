@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -8,7 +8,7 @@
 //! A Ceed Basis defines the discrete finite element basis and associated
 //! quadrature rule.
 
-use crate::prelude::*;
+use crate::{prelude::*, vector::Vector, EvalMode, TransposeMode};
 
 // -----------------------------------------------------------------------------
 // Basis option
@@ -27,7 +27,7 @@ impl<'a> From<&'a Basis<'_>> for BasisOpt<'a> {
 }
 impl<'a> BasisOpt<'a> {
     /// Transform a Rust libCEED BasisOpt into C libCEED CeedBasis
-    pub(crate) fn to_raw(self) -> bind_ceed::CeedBasis {
+    pub(crate) fn to_raw(&self) -> bind_ceed::CeedBasis {
         match self {
             Self::Some(basis) => basis.ptr,
             Self::None => unsafe { bind_ceed::CEED_BASIS_NONE },
@@ -37,7 +37,7 @@ impl<'a> BasisOpt<'a> {
     /// Check if a BasisOpt is Some
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let b = ceed.basis_tensor_H1_Lagrange(1, 2, 3, 4, QuadMode::Gauss)?;
@@ -59,7 +59,7 @@ impl<'a> BasisOpt<'a> {
     /// Check if a BasisOpt is None
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, BasisOpt, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let b = ceed.basis_tensor_H1_Lagrange(1, 2, 3, 4, QuadMode::Gauss)?;
@@ -108,7 +108,7 @@ impl<'a> fmt::Display for Basis<'a> {
     /// View a Basis
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let b = ceed.basis_tensor_H1_Lagrange(1, 2, 3, 4, QuadMode::Gauss)?;
@@ -134,6 +134,7 @@ impl<'a> fmt::Display for Basis<'a> {
 // -----------------------------------------------------------------------------
 impl<'a> Basis<'a> {
     // Constructors
+    #[allow(clippy::too_many_arguments)]
     pub fn create_tensor_H1(
         ceed: &crate::Ceed,
         dim: usize,
@@ -152,7 +153,7 @@ impl<'a> Basis<'a> {
             i32::try_from(P1d).unwrap(),
             i32::try_from(Q1d).unwrap(),
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedBasisCreateTensorH1(
                 ceed.ptr,
                 dim,
@@ -165,15 +166,14 @@ impl<'a> Basis<'a> {
                 qweight1d.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
-    pub(crate) fn from_raw(ptr: bind_ceed::CeedBasis) -> crate::Result<Self> {
+    pub(crate) unsafe fn from_raw(ptr: bind_ceed::CeedBasis) -> crate::Result<Self> {
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
@@ -196,16 +196,16 @@ impl<'a> Basis<'a> {
             i32::try_from(Q).unwrap(),
             qmode as bind_ceed::CeedQuadMode,
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedBasisCreateTensorH1Lagrange(ceed.ptr, dim, ncomp, P, Q, qmode, &mut ptr)
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_H1(
         ceed: &crate::Ceed,
         topo: crate::ElemTopology,
@@ -224,7 +224,7 @@ impl<'a> Basis<'a> {
             i32::try_from(nnodes).unwrap(),
             i32::try_from(nqpts).unwrap(),
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedBasisCreateH1(
                 ceed.ptr,
                 topo,
@@ -237,14 +237,14 @@ impl<'a> Basis<'a> {
                 qweight.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_Hdiv(
         ceed: &crate::Ceed,
         topo: crate::ElemTopology,
@@ -263,7 +263,7 @@ impl<'a> Basis<'a> {
             i32::try_from(nnodes).unwrap(),
             i32::try_from(nqpts).unwrap(),
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedBasisCreateHdiv(
                 ceed.ptr,
                 topo,
@@ -276,14 +276,14 @@ impl<'a> Basis<'a> {
                 qweight.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_Hcurl(
         ceed: &crate::Ceed,
         topo: crate::ElemTopology,
@@ -302,7 +302,7 @@ impl<'a> Basis<'a> {
             i32::try_from(nnodes).unwrap(),
             i32::try_from(nqpts).unwrap(),
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedBasisCreateHcurl(
                 ceed.ptr,
                 topo,
@@ -315,22 +315,23 @@ impl<'a> Basis<'a> {
                 qweight.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
+    // Raw Ceed for error handling
+    #[doc(hidden)]
+    fn ceed(&self) -> bind_ceed::Ceed {
+        unsafe { bind_ceed::CeedBasisReturnCeed(self.ptr) }
+    }
+
     // Error handling
     #[doc(hidden)]
     fn check_error(&self, ierr: i32) -> crate::Result<i32> {
-        let mut ptr = std::ptr::null_mut();
-        unsafe {
-            bind_ceed::CeedBasisGetCeed(self.ptr, &mut ptr);
-        }
-        crate::check_error(ptr, ierr)
+        crate::check_error(|| self.ceed(), ierr)
     }
 
     /// Apply basis evaluation from nodes to quadrature points or vice versa
@@ -346,7 +347,7 @@ impl<'a> Basis<'a> {
     /// * `v`     - Output Vector
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, EvalMode, TransposeMode, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// const Q: usize = 6;
@@ -411,15 +412,15 @@ impl<'a> Basis<'a> {
             tmode as bind_ceed::CeedTransposeMode,
             emode as bind_ceed::CeedEvalMode,
         );
-        let ierr =
-            unsafe { bind_ceed::CeedBasisApply(self.ptr, nelem, tmode, emode, u.ptr, v.ptr) };
-        self.check_error(ierr)
+        self.check_error(unsafe {
+            bind_ceed::CeedBasisApply(self.ptr, nelem, tmode, emode, u.ptr, v.ptr)
+        })
     }
 
     /// Returns the dimension for given Basis
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let dim = 2;
@@ -439,7 +440,7 @@ impl<'a> Basis<'a> {
     /// Returns number of components for given Basis
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let ncomp = 2;
@@ -459,7 +460,7 @@ impl<'a> Basis<'a> {
     /// Returns total number of nodes (in dim dimensions) of a Basis
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let p = 3;
@@ -480,7 +481,7 @@ impl<'a> Basis<'a> {
     /// Basis
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let q = 4;
@@ -509,7 +510,7 @@ impl<'a> Basis<'a> {
     /// points and weights.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, EvalMode, TransposeMode, QuadMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let coarse = ceed.basis_tensor_H1_Lagrange(1, 1, 2, 3, QuadMode::Gauss)?;
@@ -530,8 +531,9 @@ impl<'a> Basis<'a> {
     /// ```
     pub fn create_projection(&self, to: &Self) -> crate::Result<Self> {
         let mut ptr = std::ptr::null_mut();
-        let ierr = unsafe { bind_ceed::CeedBasisCreateProjection(self.ptr, to.ptr, &mut ptr) };
-        self.check_error(ierr)?;
+        self.check_error(unsafe {
+            bind_ceed::CeedBasisCreateProjection(self.ptr, to.ptr, &mut ptr)
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,

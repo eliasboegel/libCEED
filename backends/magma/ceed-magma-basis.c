@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -117,10 +117,10 @@ static int CeedBasisApplyCore_Magma(CeedBasis basis, bool apply_add, CeedInt num
       void   *args[] = {&impl->d_interp_1d, &d_u, &u_elem_stride, &u_comp_stride, &d_v, &v_elem_stride, &v_comp_stride, &num_elem};
 
       if (t_mode == CEED_TRANSPOSE) {
-        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, apply_add ? impl->InterpTransposeAdd : impl->InterpTranspose, grid, num_threads, num_t_col,
-                                                    1, shared_mem, args));
+        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, apply_add ? impl->InterpTransposeAdd : impl->InterpTranspose, NULL, grid, num_threads,
+                                                    num_t_col, 1, shared_mem, args));
       } else {
-        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Interp, grid, num_threads, num_t_col, 1, shared_mem, args));
+        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Interp, NULL, grid, num_threads, num_t_col, 1, shared_mem, args));
       }
     } break;
     case CEED_EVAL_GRAD: {
@@ -195,10 +195,10 @@ static int CeedBasisApplyCore_Magma(CeedBasis basis, bool apply_add, CeedInt num
                         &v_elem_stride,     &v_comp_stride,   &v_dim_stride, &num_elem};
 
       if (t_mode == CEED_TRANSPOSE) {
-        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, apply_add ? impl->GradTransposeAdd : impl->GradTranspose, grid, num_threads, num_t_col, 1,
-                                                    shared_mem, args));
+        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, apply_add ? impl->GradTransposeAdd : impl->GradTranspose, NULL, grid, num_threads,
+                                                    num_t_col, 1, shared_mem, args));
       } else {
-        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Grad, grid, num_threads, num_t_col, 1, shared_mem, args));
+        CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Grad, NULL, grid, num_threads, num_t_col, 1, shared_mem, args));
       }
     } break;
     case CEED_EVAL_WEIGHT: {
@@ -230,7 +230,7 @@ static int CeedBasisApplyCore_Magma(CeedBasis basis, bool apply_add, CeedInt num
       CeedInt grid   = CeedDivUpInt(num_elem, num_t_col);
       void   *args[] = {&impl->d_q_weight_1d, &d_v, &elem_dofs_size, &num_elem};
 
-      CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Weight, grid, num_threads, num_t_col, 1, shared_mem, args));
+      CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Weight, NULL, grid, num_threads, num_t_col, 1, shared_mem, args));
     } break;
     // LCOV_EXCL_START
     case CEED_EVAL_DIV:
@@ -249,6 +249,7 @@ static int CeedBasisApplyCore_Magma(CeedBasis basis, bool apply_add, CeedInt num
     CeedCallBackend(CeedVectorRestoreArrayRead(u, &d_u));
   }
   CeedCallBackend(CeedVectorRestoreArray(v, &d_v));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -371,6 +372,7 @@ static int CeedBasisApplyNonTensorCore_Magma(CeedBasis basis, bool apply_add, Ce
       CeedCallBackend(CeedFree(&basis_kernel_source));
       for (CeedInt i = 0; i < num_file_paths; i++) CeedCallBackend(CeedFree(&file_paths[i]));
       CeedCallBackend(CeedFree(&file_paths));
+      CeedCallBackend(CeedDestroy(&ceed_delegate));
     }
   }
 
@@ -427,7 +429,7 @@ static int CeedBasisApplyNonTensorCore_Magma(CeedBasis basis, bool apply_add, Ce
       CeedInt shared_mem   = (t_mode != CEED_TRANSPOSE && q_comp > 1) ? (shared_mem_A + shared_mem_B) : CeedIntMax(shared_mem_A, shared_mem_B);
       void   *args[]       = {&N, &d_b, &d_u, &d_v};
 
-      CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, Kernel, grid, M, num_t_col, 1, shared_mem, args));
+      CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, Kernel, NULL, grid, M, num_t_col, 1, shared_mem, args));
     } else {
       for (CeedInt d = 0; d < q_comp; d++) {
         if (t_mode == CEED_TRANSPOSE) {
@@ -446,7 +448,7 @@ static int CeedBasisApplyNonTensorCore_Magma(CeedBasis basis, bool apply_add, Ce
     CeedInt shared_mem = Q * sizeof(CeedScalar) + num_t_col * Q * sizeof(CeedScalar);
     void   *args[]     = {&num_elem, &impl->d_q_weight, &d_v};
 
-    CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Weight, grid, Q, num_t_col, 1, shared_mem, args));
+    CeedCallBackend(CeedRunKernelDimSharedMagma(ceed, impl->Weight, NULL, grid, Q, num_t_col, 1, shared_mem, args));
   }
 
   // Must sync to ensure completeness
@@ -457,6 +459,7 @@ static int CeedBasisApplyNonTensorCore_Magma(CeedBasis basis, bool apply_add, Ce
     CeedCallBackend(CeedVectorRestoreArrayRead(u, &d_u));
   }
   CeedCallBackend(CeedVectorRestoreArray(v, &d_v));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -490,6 +493,7 @@ static int CeedBasisDestroy_Magma(CeedBasis basis) {
   CeedCallBackend(magma_free(impl->d_grad_1d));
   if (impl->d_q_weight_1d) CeedCallBackend(magma_free(impl->d_q_weight_1d));
   CeedCallBackend(CeedFree(&impl));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -517,6 +521,7 @@ static int CeedBasisDestroyNonTensor_Magma(CeedBasis basis) {
   CeedCallBackend(magma_free(impl->d_curl));
   if (impl->d_q_weight) CeedCallBackend(magma_free(impl->d_q_weight));
   CeedCallBackend(CeedFree(&impl));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -626,6 +631,8 @@ int CeedBasisCreateTensorH1_Magma(CeedInt dim, CeedInt P_1d, CeedInt Q_1d, const
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "ApplyAdd", CeedBasisApplyAdd_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "ApplyAtPoints", CeedBasisApplyAtPoints_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "Destroy", CeedBasisDestroy_Magma));
+  CeedCallBackend(CeedDestroy(&ceed));
+  CeedCallBackend(CeedDestroy(&ceed_delegate));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -680,6 +687,7 @@ int CeedBasisCreateH1_Magma(CeedElemTopology topo, CeedInt dim, CeedInt num_node
     CeedCallBackend(CeedGetKernelMagma(ceed, impl->module[0], "magma_weight_nontensor", &impl->Weight));
     CeedCallBackend(CeedFree(&weight_kernel_path));
     CeedCallBackend(CeedFree(&basis_kernel_source));
+    CeedCallBackend(CeedDestroy(&ceed_delegate));
   }
 
   CeedCallBackend(CeedBasisSetData(basis, impl));
@@ -688,6 +696,7 @@ int CeedBasisCreateH1_Magma(CeedElemTopology topo, CeedInt dim, CeedInt num_node
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "Apply", CeedBasisApplyNonTensor_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "ApplyAdd", CeedBasisApplyAddNonTensor_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "Destroy", CeedBasisDestroyNonTensor_Magma));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -742,6 +751,7 @@ int CeedBasisCreateHdiv_Magma(CeedElemTopology topo, CeedInt dim, CeedInt num_no
     CeedCallBackend(CeedGetKernelMagma(ceed, impl->module[0], "magma_weight_nontensor", &impl->Weight));
     CeedCallBackend(CeedFree(&weight_kernel_path));
     CeedCallBackend(CeedFree(&basis_kernel_source));
+    CeedCallBackend(CeedDestroy(&ceed_delegate));
   }
 
   CeedCallBackend(CeedBasisSetData(basis, impl));
@@ -750,6 +760,7 @@ int CeedBasisCreateHdiv_Magma(CeedElemTopology topo, CeedInt dim, CeedInt num_no
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "Apply", CeedBasisApplyNonTensor_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "ApplyAdd", CeedBasisApplyAddNonTensor_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "Destroy", CeedBasisDestroyNonTensor_Magma));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -804,6 +815,7 @@ int CeedBasisCreateHcurl_Magma(CeedElemTopology topo, CeedInt dim, CeedInt num_n
     CeedCallBackend(CeedGetKernelMagma(ceed, impl->module[0], "magma_weight_nontensor", &impl->Weight));
     CeedCallBackend(CeedFree(&weight_kernel_path));
     CeedCallBackend(CeedFree(&basis_kernel_source));
+    CeedCallBackend(CeedDestroy(&ceed_delegate));
   }
 
   CeedCallBackend(CeedBasisSetData(basis, impl));
@@ -812,6 +824,7 @@ int CeedBasisCreateHcurl_Magma(CeedElemTopology topo, CeedInt dim, CeedInt num_n
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "Apply", CeedBasisApplyNonTensor_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "ApplyAdd", CeedBasisApplyAddNonTensor_Magma));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Basis", basis, "Destroy", CeedBasisDestroyNonTensor_Magma));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -75,7 +75,7 @@
 #endif
 
 /**
-  This enum supples common colors for CeedDebug256 debugging output.
+  This enum supplies common colors for CeedDebug256 debugging output.
   Set the environment variable `CEED_DEBUG = 1` to activate debugging output.
 
   @ingroup Ceed
@@ -142,8 +142,10 @@ CEED_EXTERN bool CeedDebugFlagEnv(void);
   @ingroup Ceed
   @ref     Backend
 **/
-#define CeedWarn(...) \
-  { CeedDebugImpl256(CEED_DEBUG_COLOR_WARNING, ##__VA_ARGS__); }
+#define CeedWarn(...)                                          \
+  {                                                            \
+    CeedDebugImpl256(CEED_DEBUG_COLOR_WARNING, ##__VA_ARGS__); \
+  }
 
 /**
   Swap the values of two CeedScalars
@@ -254,6 +256,10 @@ CEED_EXTERN int CeedSetData(Ceed ceed, void *data);
 CEED_EXTERN int CeedReference(Ceed ceed);
 CEED_EXTERN int CeedGetWorkVector(Ceed ceed, CeedSize len, CeedVector *vec);
 CEED_EXTERN int CeedRestoreWorkVector(Ceed ceed, CeedVector *vec);
+CEED_EXTERN int CeedGetJitSourceRoots(Ceed ceed, CeedInt *num_source_roots, const char ***jit_source_roots);
+CEED_EXTERN int CeedRestoreJitSourceRoots(Ceed ceed, const char ***jit_source_roots);
+CEED_EXTERN int CeedGetJitDefines(Ceed ceed, CeedInt *num_defines, const char ***jit_defines);
+CEED_EXTERN int CeedRestoreJitDefines(Ceed ceed, const char ***jit_defines);
 
 CEED_EXTERN int CeedVectorHasValidArray(CeedVector vec, bool *has_valid_array);
 CEED_EXTERN int CeedVectorHasBorrowedArrayOfType(CeedVector vec, CeedMemType mem_type, bool *has_borrowed_array_of_type);
@@ -263,8 +269,12 @@ CEED_EXTERN int CeedVectorGetData(CeedVector vec, void *data);
 CEED_EXTERN int CeedVectorSetData(CeedVector vec, void *data);
 CEED_EXTERN int CeedVectorReference(CeedVector vec);
 
-/// Type of element restriction;
-/// @ingroup CeedElemRestriction
+/**
+  Specify type of restriction operation.
+
+  @ingroup CeedElemRestriction
+  @ref     Backend
+**/
 typedef enum {
   /// Standard element restriction with offsets
   CEED_RESTRICTION_STANDARD = 1,
@@ -301,8 +311,12 @@ CEED_EXTERN int CeedElemRestrictionSetData(CeedElemRestriction rstr, void *data)
 CEED_EXTERN int CeedElemRestrictionReference(CeedElemRestriction rstr);
 CEED_EXTERN int CeedElemRestrictionGetFlopsEstimate(CeedElemRestriction rstr, CeedTransposeMode t_mode, CeedSize *flops);
 
-/// Type of FE space;
-/// @ingroup CeedBasis
+/**
+  Specify type of FE space.
+
+  @ingroup CeedBasis
+  @ref     Backend
+**/
 typedef enum {
   /// H^1 FE space
   CEED_FE_SPACE_H1 = 1,
@@ -320,11 +334,15 @@ CEED_EXTERN int CeedBasisGetData(CeedBasis basis, void *data);
 CEED_EXTERN int CeedBasisSetData(CeedBasis basis, void *data);
 CEED_EXTERN int CeedBasisReference(CeedBasis basis);
 CEED_EXTERN int CeedBasisGetNumQuadratureComponents(CeedBasis basis, CeedEvalMode eval_mode, CeedInt *q_comp);
-CEED_EXTERN int CeedBasisGetFlopsEstimate(CeedBasis basis, CeedTransposeMode t_mode, CeedEvalMode eval_mode, CeedSize *flops);
+CEED_EXTERN int CeedBasisGetFlopsEstimate(CeedBasis basis, CeedTransposeMode t_mode, CeedEvalMode eval_mode, bool is_at_points, CeedInt num_points,
+                                          CeedSize *flops);
 CEED_EXTERN int CeedBasisGetFESpace(CeedBasis basis, CeedFESpace *fe_space);
 CEED_EXTERN int CeedBasisGetTopologyDimension(CeedElemTopology topo, CeedInt *dim);
 CEED_EXTERN int CeedBasisGetTensorContract(CeedBasis basis, CeedTensorContract *contract);
 CEED_EXTERN int CeedBasisSetTensorContract(CeedBasis basis, CeedTensorContract contract);
+CEED_EXTERN int CeedBasisCreateH1Fallback(Ceed ceed, CeedElemTopology topo, CeedInt num_comp, CeedInt num_nodes, CeedInt nqpts,
+                                          const CeedScalar *interp, const CeedScalar *grad, const CeedScalar *q_ref, const CeedScalar *q_weights,
+                                          CeedBasis basis);
 
 CEED_EXTERN int  CeedTensorContractCreate(Ceed ceed, CeedTensorContract *contract);
 CEED_EXTERN int  CeedTensorContractApply(CeedTensorContract contract, CeedInt A, CeedInt B, CeedInt C, CeedInt J, const CeedScalar *__restrict__ t,

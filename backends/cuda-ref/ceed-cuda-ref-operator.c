@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -78,10 +78,11 @@ static int CeedOperatorDestroy_Cuda(CeedOperator op) {
     CeedCallCuda(ceed, cudaFree(impl->diag->d_div_out));
     CeedCallCuda(ceed, cudaFree(impl->diag->d_curl_in));
     CeedCallCuda(ceed, cudaFree(impl->diag->d_curl_out));
-    CeedCallBackend(CeedElemRestrictionDestroy(&impl->diag->diag_rstr));
-    CeedCallBackend(CeedElemRestrictionDestroy(&impl->diag->point_block_diag_rstr));
+    CeedCallBackend(CeedDestroy(&ceed));
     CeedCallBackend(CeedVectorDestroy(&impl->diag->elem_diag));
     CeedCallBackend(CeedVectorDestroy(&impl->diag->point_block_elem_diag));
+    CeedCallBackend(CeedElemRestrictionDestroy(&impl->diag->diag_rstr));
+    CeedCallBackend(CeedElemRestrictionDestroy(&impl->diag->point_block_diag_rstr));
   }
   CeedCallBackend(CeedFree(&impl->diag));
 
@@ -92,6 +93,7 @@ static int CeedOperatorDestroy_Cuda(CeedOperator op) {
     CeedCallCuda(ceed, cuModuleUnload(impl->asmb->module));
     CeedCallCuda(ceed, cudaFree(impl->asmb->d_B_in));
     CeedCallCuda(ceed, cudaFree(impl->asmb->d_B_out));
+    CeedCallBackend(CeedDestroy(&ceed));
   }
   CeedCallBackend(CeedFree(&impl->asmb));
 
@@ -130,7 +132,7 @@ static int CeedOperatorSetupFields_Cuda(CeedQFunction qf, CeedOperator op, bool 
     // Input CEED_VECTOR_ACTIVE
     // Output CEED_VECTOR_ACTIVE without CEED_EVAL_NONE
     // Input CEED_VECTOR_NONE with CEED_EVAL_WEIGHT
-    // Input passive vectorr with CEED_EVAL_NONE and strided restriction with CEED_STRIDES_BACKEND
+    // Input passive vector with CEED_EVAL_NONE and strided restriction with CEED_STRIDES_BACKEND
     CeedCallBackend(CeedOperatorFieldGetVector(op_fields[i], &l_vec));
     is_active = l_vec == CEED_VECTOR_ACTIVE;
     CeedCallBackend(CeedVectorDestroy(&l_vec));
@@ -227,6 +229,7 @@ static int CeedOperatorSetupFields_Cuda(CeedQFunction qf, CeedOperator op, bool 
       CeedCallBackend(CeedElemRestrictionDestroy(&rstr_i));
     }
   }
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -234,7 +237,6 @@ static int CeedOperatorSetupFields_Cuda(CeedQFunction qf, CeedOperator op, bool 
 // CeedOperator needs to connect all the named fields (be they active or passive) to the named inputs and outputs of its CeedQFunction.
 //------------------------------------------------------------------------------
 static int CeedOperatorSetup_Cuda(CeedOperator op) {
-  Ceed                ceed;
   bool                is_setup_done;
   CeedInt             Q, num_elem, num_input_fields, num_output_fields;
   CeedQFunctionField *qf_input_fields, *qf_output_fields;
@@ -245,7 +247,6 @@ static int CeedOperatorSetup_Cuda(CeedOperator op) {
   CeedCallBackend(CeedOperatorIsSetupDone(op, &is_setup_done));
   if (is_setup_done) return CEED_ERROR_SUCCESS;
 
-  CeedCallBackend(CeedOperatorGetCeed(op, &ceed));
   CeedCallBackend(CeedOperatorGetData(op, &impl));
   CeedCallBackend(CeedOperatorGetQFunction(op, &qf));
   CeedCallBackend(CeedOperatorGetNumQuadraturePoints(op, &Q));
@@ -353,6 +354,7 @@ static int CeedOperatorSetup_Cuda(CeedOperator op) {
     }
   }
   CeedCallBackend(CeedOperatorSetSetupDone(op));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -587,11 +589,7 @@ static int CeedOperatorApplyAdd_Cuda(CeedOperator op, CeedVector in_vec, CeedVec
     }
 
     // Restrict
-    if (impl->skip_rstr_out[field]) {
-      if (!is_active) CeedCallBackend(CeedVectorDestroy(&l_vec));
-      continue;
-    }
-    {
+    if (!impl->skip_rstr_out[field]) {
       CeedElemRestriction elem_rstr;
 
       CeedCallBackend(CeedOperatorFieldGetElemRestriction(op_output_fields[field], &elem_rstr));
@@ -603,6 +601,8 @@ static int CeedOperatorApplyAdd_Cuda(CeedOperator op, CeedVector in_vec, CeedVec
 
   // Return work vector
   CeedCallBackend(CeedRestoreWorkVector(ceed, &active_e_vec));
+  CeedCallBackend(CeedDestroy(&ceed));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -610,7 +610,6 @@ static int CeedOperatorApplyAdd_Cuda(CeedOperator op, CeedVector in_vec, CeedVec
 // CeedOperator needs to connect all the named fields (be they active or passive) to the named inputs and outputs of its CeedQFunction.
 //------------------------------------------------------------------------------
 static int CeedOperatorSetupAtPoints_Cuda(CeedOperator op) {
-  Ceed                ceed;
   bool                is_setup_done;
   CeedInt             max_num_points = -1, num_elem, num_input_fields, num_output_fields;
   CeedQFunctionField *qf_input_fields, *qf_output_fields;
@@ -621,7 +620,6 @@ static int CeedOperatorSetupAtPoints_Cuda(CeedOperator op) {
   CeedCallBackend(CeedOperatorIsSetupDone(op, &is_setup_done));
   if (is_setup_done) return CEED_ERROR_SUCCESS;
 
-  CeedCallBackend(CeedOperatorGetCeed(op, &ceed));
   CeedCallBackend(CeedOperatorGetData(op, &impl));
   CeedCallBackend(CeedOperatorGetQFunction(op, &qf));
   CeedCallBackend(CeedOperatorGetNumElements(op, &num_elem));
@@ -743,6 +741,7 @@ static int CeedOperatorSetupAtPoints_Cuda(CeedOperator op) {
     }
   }
   CeedCallBackend(CeedOperatorSetSetupDone(op));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -918,11 +917,7 @@ static int CeedOperatorApplyAddAtPoints_Cuda(CeedOperator op, CeedVector in_vec,
     }
 
     // Restrict
-    if (impl->skip_rstr_out[field]) {
-      if (!is_active) CeedCallBackend(CeedVectorDestroy(&l_vec));
-      continue;
-    }
-    {
+    if (!impl->skip_rstr_out[field]) {
       CeedElemRestriction elem_rstr;
 
       CeedCallBackend(CeedOperatorFieldGetElemRestriction(op_output_fields[field], &elem_rstr));
@@ -934,6 +929,8 @@ static int CeedOperatorApplyAddAtPoints_Cuda(CeedOperator op, CeedVector in_vec,
 
   // Restore work vector
   CeedCallBackend(CeedRestoreWorkVector(ceed, &active_e_vec));
+  CeedCallBackend(CeedDestroy(&ceed));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -1076,6 +1073,9 @@ static inline int CeedOperatorLinearAssembleQFunctionCore_Cuda(CeedOperator op, 
 
   // Restore output
   CeedCallBackend(CeedVectorRestoreArray(*assembled, &assembled_array));
+  CeedCallBackend(CeedDestroy(&ceed));
+  CeedCallBackend(CeedDestroy(&ceed_parent));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -1276,8 +1276,10 @@ static inline int CeedOperatorAssembleDiagonalSetup_Cuda(CeedOperator op) {
   CeedCallCuda(ceed, cudaMemcpy(diag->d_eval_modes_out, eval_modes_out, num_eval_modes_out * eval_modes_bytes, cudaMemcpyHostToDevice));
   CeedCallBackend(CeedFree(&eval_modes_in));
   CeedCallBackend(CeedFree(&eval_modes_out));
+  CeedCallBackend(CeedDestroy(&ceed));
   CeedCallBackend(CeedBasisDestroy(&basis_in));
   CeedCallBackend(CeedBasisDestroy(&basis_out));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -1286,8 +1288,6 @@ static inline int CeedOperatorAssembleDiagonalSetup_Cuda(CeedOperator op) {
 //------------------------------------------------------------------------------
 static inline int CeedOperatorAssembleDiagonalSetupCompile_Cuda(CeedOperator op, CeedInt use_ceedsize_idx, const bool is_point_block) {
   Ceed                ceed;
-  char               *diagonal_kernel_source;
-  const char         *diagonal_kernel_path;
   CeedInt             num_input_fields, num_output_fields, num_eval_modes_in = 0, num_eval_modes_out = 0;
   CeedInt             num_comp, q_comp, num_nodes, num_qpts;
   CeedBasis           basis_in = NULL, basis_out = NULL;
@@ -1351,24 +1351,22 @@ static inline int CeedOperatorAssembleDiagonalSetupCompile_Cuda(CeedOperator op,
   CeedOperatorDiag_Cuda *diag = impl->diag;
 
   // Assemble kernel
-  CUmodule *module          = is_point_block ? &diag->module_point_block : &diag->module;
-  CeedInt   elems_per_block = 1;
+  const char diagonal_kernel_source[] = "// Diagonal assembly source\n#include <ceed/jit-source/cuda/cuda-ref-operator-assemble-diagonal.h>\n";
+  CUmodule  *module                   = is_point_block ? &diag->module_point_block : &diag->module;
+  CeedInt    elems_per_block          = 1;
+
   CeedCallBackend(CeedBasisGetNumNodes(basis_in, &num_nodes));
   CeedCallBackend(CeedBasisGetNumComponents(basis_in, &num_comp));
   if (basis_in == CEED_BASIS_NONE) num_qpts = num_nodes;
   else CeedCallBackend(CeedBasisGetNumQuadraturePoints(basis_in, &num_qpts));
-  CeedCallBackend(CeedGetJitAbsolutePath(ceed, "ceed/jit-source/cuda/cuda-ref-operator-assemble-diagonal.h", &diagonal_kernel_path));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading Diagonal Assembly Kernel Source -----\n");
-  CeedCallBackend(CeedLoadSourceToBuffer(ceed, diagonal_kernel_path, &diagonal_kernel_source));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading Diagonal Assembly Source Complete! -----\n");
   CeedCallCuda(ceed, CeedCompile_Cuda(ceed, diagonal_kernel_source, module, 8, "NUM_EVAL_MODES_IN", num_eval_modes_in, "NUM_EVAL_MODES_OUT",
                                       num_eval_modes_out, "NUM_COMP", num_comp, "NUM_NODES", num_nodes, "NUM_QPTS", num_qpts, "USE_CEEDSIZE",
                                       use_ceedsize_idx, "USE_POINT_BLOCK", is_point_block ? 1 : 0, "BLOCK_SIZE", num_nodes * elems_per_block));
   CeedCallCuda(ceed, CeedGetKernel_Cuda(ceed, *module, "LinearDiagonal", is_point_block ? &diag->LinearPointBlock : &diag->LinearDiagonal));
-  CeedCallBackend(CeedFree(&diagonal_kernel_path));
-  CeedCallBackend(CeedFree(&diagonal_kernel_source));
+  CeedCallBackend(CeedDestroy(&ceed));
   CeedCallBackend(CeedBasisDestroy(&basis_in));
   CeedCallBackend(CeedBasisDestroy(&basis_out));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -1455,6 +1453,7 @@ static inline int CeedOperatorAssembleDiagonalCore_Cuda(CeedOperator op, CeedVec
   CeedCallBackend(CeedElemRestrictionApply(diag_rstr, CEED_TRANSPOSE, elem_diag, assembled, request));
 
   // Cleanup
+  CeedCallBackend(CeedDestroy(&ceed));
   CeedCallBackend(CeedVectorDestroy(&assembled_qf));
   return CEED_ERROR_SUCCESS;
 }
@@ -1481,8 +1480,6 @@ static int CeedOperatorLinearAssembleAddPointBlockDiagonal_Cuda(CeedOperator op,
 static int CeedSingleOperatorAssembleSetup_Cuda(CeedOperator op, CeedInt use_ceedsize_idx) {
   Ceed                ceed;
   Ceed_Cuda          *cuda_data;
-  char               *assembly_kernel_source;
-  const char         *assembly_kernel_path;
   CeedInt             num_input_fields, num_output_fields, num_eval_modes_in = 0, num_eval_modes_out = 0;
   CeedInt             elem_size_in, num_qpts_in = 0, num_comp_in, elem_size_out, num_qpts_out, num_comp_out, q_comp;
   CeedEvalMode       *eval_modes_in = NULL, *eval_modes_out = NULL;
@@ -1589,20 +1586,16 @@ static int CeedSingleOperatorAssembleSetup_Cuda(CeedOperator op, CeedInt use_cee
   }
 
   // Compile kernels
+  const char assembly_kernel_source[] = "// Full assembly source\n#include <ceed/jit-source/cuda/cuda-ref-operator-assemble.h>\n";
+
   CeedCallBackend(CeedElemRestrictionGetNumComponents(rstr_in, &num_comp_in));
   CeedCallBackend(CeedElemRestrictionGetNumComponents(rstr_out, &num_comp_out));
-  CeedCallBackend(CeedGetJitAbsolutePath(ceed, "ceed/jit-source/cuda/cuda-ref-operator-assemble.h", &assembly_kernel_path));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading Assembly Kernel Source -----\n");
-  CeedCallBackend(CeedLoadSourceToBuffer(ceed, assembly_kernel_path, &assembly_kernel_source));
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "----- Loading Assembly Source Complete! -----\n");
   CeedCallBackend(CeedCompile_Cuda(ceed, assembly_kernel_source, &asmb->module, 10, "NUM_EVAL_MODES_IN", num_eval_modes_in, "NUM_EVAL_MODES_OUT",
                                    num_eval_modes_out, "NUM_COMP_IN", num_comp_in, "NUM_COMP_OUT", num_comp_out, "NUM_NODES_IN", elem_size_in,
                                    "NUM_NODES_OUT", elem_size_out, "NUM_QPTS", num_qpts_in, "BLOCK_SIZE",
                                    asmb->block_size_x * asmb->block_size_y * asmb->elems_per_block, "BLOCK_SIZE_Y", asmb->block_size_y,
                                    "USE_CEEDSIZE", use_ceedsize_idx));
   CeedCallBackend(CeedGetKernel_Cuda(ceed, asmb->module, "LinearAssemble", &asmb->LinearAssemble));
-  CeedCallBackend(CeedFree(&assembly_kernel_path));
-  CeedCallBackend(CeedFree(&assembly_kernel_source));
 
   // Load into B_in, in order that they will be used in eval_modes_in
   {
@@ -1673,10 +1666,12 @@ static int CeedSingleOperatorAssembleSetup_Cuda(CeedOperator op, CeedInt use_cee
     CeedCallBackend(CeedFree(&identity));
   }
   CeedCallBackend(CeedFree(&eval_modes_out));
+  CeedCallBackend(CeedDestroy(&ceed));
   CeedCallBackend(CeedElemRestrictionDestroy(&rstr_in));
   CeedCallBackend(CeedElemRestrictionDestroy(&rstr_out));
   CeedCallBackend(CeedBasisDestroy(&basis_in));
   CeedCallBackend(CeedBasisDestroy(&basis_out));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -1760,8 +1755,8 @@ static int CeedSingleOperatorAssemble_Cuda(CeedOperator op, CeedInt offset, Ceed
   void   *args[] = {(void *)&num_elem_in, &asmb->d_B_in,     &asmb->d_B_out,      &orients_in,  &curl_orients_in,
                     &orients_out,         &curl_orients_out, &assembled_qf_array, &values_array};
 
-  CeedCallBackend(
-      CeedRunKernelDimShared_Cuda(ceed, asmb->LinearAssemble, grid, asmb->block_size_x, asmb->block_size_y, asmb->elems_per_block, shared_mem, args));
+  CeedCallBackend(CeedRunKernelDimShared_Cuda(ceed, asmb->LinearAssemble, NULL, grid, asmb->block_size_x, asmb->block_size_y, asmb->elems_per_block,
+                                              shared_mem, args));
 
   // Restore arrays
   CeedCallBackend(CeedVectorRestoreArray(values, &values_array));
@@ -1781,6 +1776,7 @@ static int CeedSingleOperatorAssemble_Cuda(CeedOperator op, CeedInt offset, Ceed
       CeedCallBackend(CeedElemRestrictionRestoreCurlOrientations(rstr_out, &curl_orients_out));
     }
   }
+  CeedCallBackend(CeedDestroy(&ceed));
   CeedCallBackend(CeedElemRestrictionDestroy(&rstr_in));
   CeedCallBackend(CeedElemRestrictionDestroy(&rstr_out));
   return CEED_ERROR_SUCCESS;
@@ -1913,9 +1909,20 @@ static int CeedOperatorLinearAssembleAddDiagonalAtPoints_Cuda(CeedOperator op, C
       if (!is_active) continue;
 
       // Update unit vector
-      if (s == 0) CeedCallBackend(CeedVectorSetValue(active_e_vec_in, 0.0));
-      else CeedCallBackend(CeedVectorSetValueStrided(active_e_vec_in, s - 1, e_vec_size, 0.0));
-      CeedCallBackend(CeedVectorSetValueStrided(active_e_vec_in, s, e_vec_size, 1.0));
+      {
+        // Note: E-vec strides are node * (1) + comp * (elem_size * num_elem) + elem * (elem_size)
+        CeedInt  node = (s - 1) % elem_size, comp = (s - 1) / elem_size;
+        CeedSize start = node * 1 + comp * (elem_size * num_elem);
+        CeedSize stop  = (comp + 1) * (elem_size * num_elem);
+
+        if (s == 0) CeedCallBackend(CeedVectorSetValue(active_e_vec_in, 0.0));
+        else CeedCallBackend(CeedVectorSetValueStrided(active_e_vec_in, start, stop, elem_size, 0.0));
+
+        node = s % elem_size, comp = s / elem_size;
+        start = node * 1 + comp * (elem_size * num_elem);
+        stop  = (comp + 1) * (elem_size * num_elem);
+        CeedCallBackend(CeedVectorSetValueStrided(active_e_vec_in, start, stop, elem_size, 1.0));
+      }
 
       // Basis action
       CeedCallBackend(CeedQFunctionFieldGetEvalMode(qf_input_fields[i], &eval_mode));
@@ -2052,6 +2059,8 @@ static int CeedOperatorLinearAssembleAddDiagonalAtPoints_Cuda(CeedOperator op, C
   // Restore work vector
   CeedCallBackend(CeedRestoreWorkVector(ceed, &active_e_vec_in));
   CeedCallBackend(CeedRestoreWorkVector(ceed, &active_e_vec_out));
+  CeedCallBackend(CeedDestroy(&ceed));
+  CeedCallBackend(CeedQFunctionDestroy(&qf));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -2074,6 +2083,7 @@ int CeedOperatorCreate_Cuda(CeedOperator op) {
   CeedCallBackend(CeedSetBackendFunction(ceed, "Operator", op, "LinearAssembleSingle", CeedSingleOperatorAssemble_Cuda));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Operator", op, "ApplyAdd", CeedOperatorApplyAdd_Cuda));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Operator", op, "Destroy", CeedOperatorDestroy_Cuda));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -2092,6 +2102,7 @@ int CeedOperatorCreateAtPoints_Cuda(CeedOperator op) {
   CeedCallBackend(CeedSetBackendFunction(ceed, "Operator", op, "LinearAssembleAddDiagonal", CeedOperatorLinearAssembleAddDiagonalAtPoints_Cuda));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Operator", op, "ApplyAdd", CeedOperatorApplyAddAtPoints_Cuda));
   CeedCallBackend(CeedSetBackendFunction(ceed, "Operator", op, "Destroy", CeedOperatorDestroy_Cuda));
+  CeedCallBackend(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 

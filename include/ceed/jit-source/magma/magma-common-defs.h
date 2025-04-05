@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -7,8 +7,7 @@
 
 /// @file
 /// Internal header for MAGMA backend common definitions
-#ifndef CEED_MAGMA_COMMON_DEFS_H
-#define CEED_MAGMA_COMMON_DEFS_H
+#pragma once
 
 #define MAGMA_DEVICE_SHARED(type, name) extern __shared__ type name[];
 
@@ -21,5 +20,3 @@
 
 // Define macro for computing the total threads in a block for use with __launch_bounds__()
 #define MAGMA_BASIS_BOUNDS(x, maxt) (x * MAGMA_BASIS_NTCOL(x, maxt))
-
-#endif  // CEED_MAGMA_COMMON_DEFS_H

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -8,7 +8,7 @@
 /// @file
 /// Geometric factors for solid mechanics example using PETSc
 
-#include <ceed.h>
+#include <ceed/types.h>
 
 // -----------------------------------------------------------------------------
 // This QFunction sets up the geometric factors required for integration and coordinate transformations

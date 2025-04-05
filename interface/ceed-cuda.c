@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -23,10 +23,7 @@
 **/
 int CeedQFunctionSetCUDAUserFunction(CeedQFunction qf, CUfunction f) {
   if (!qf->SetCUDAUserFunction) {
-    Ceed ceed;
-
-    CeedCall(CeedQFunctionGetCeed(qf, &ceed));
-    CeedDebug(ceed, "Backend does not support CUfunction pointers for QFunctions.");
+    CeedDebug(CeedQFunctionReturnCeed(qf), "Backend does not support CUfunction pointers for QFunctions.");
   } else {
     CeedCall(qf->SetCUDAUserFunction(qf, f));
   }

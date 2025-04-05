@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -9,8 +9,11 @@
 /// Eigen system solver for symmetric NxN matrices. Modified from the CC0 code provided at https://github.com/jewettaij/jacobi_pd
 #pragma once
 
-#include <ceed.h>
+#include <ceed/types.h>
+#ifndef CEED_RUNNING_JIT_PASS
 #include <math.h>
+#include <stdbool.h>
+#endif
 
 #include "utils.h"
 

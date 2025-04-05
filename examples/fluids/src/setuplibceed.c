@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -70,7 +70,7 @@ static PetscErrorCode CreateKSPMass(User user, ProblemData problem) {
 
     PetscCall(DMCreateLocalVector(dm, &Zeros_loc));
     PetscCall(VecZeroEntries(Zeros_loc));
-    PetscCall(MatCeedCreate(dm, dm, op_mass, NULL, &mat_mass));
+    PetscCall(MatCreateCeed(dm, dm, op_mass, NULL, &mat_mass));
     PetscCall(MatCeedSetLocalVectors(mat_mass, Zeros_loc, NULL));
 
     PetscCall(KSPCreate(comm, &user->mass_ksp));
@@ -469,7 +469,7 @@ PetscErrorCode SetupLibceed(Ceed ceed, CeedData ceed_data, DM dm, User user, App
     PetscCallCeed(ceed, CeedOperatorGetContextFieldLabel(user->op_ifunction, "timestep size", &user->phys->timestep_size_label));
 
     if (op_ijacobian) {
-      PetscCall(MatCeedCreate(user->dm, user->dm, op_ijacobian, NULL, &user->mat_ijacobian));
+      PetscCall(MatCreateCeed(user->dm, user->dm, op_ijacobian, NULL, &user->mat_ijacobian));
       PetscCall(MatCeedSetLocalVectors(user->mat_ijacobian, user->Q_dot_loc, NULL));
       PetscCallCeed(ceed, CeedOperatorDestroy(&op_ijacobian));
     }

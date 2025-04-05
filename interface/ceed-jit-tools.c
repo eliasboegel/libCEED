@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -130,8 +130,6 @@ int CeedLoadSourceToInitializedBuffer(Ceed ceed, const char *source_file_path, C
   CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "---------- Ceed JiT ----------\n");
   CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "Current source file: ");
   CeedDebug(ceed, "%s\n", source_file_path);
-  CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "Current buffer:\n");
-  CeedDebug(ceed, "%s\n", *buffer);
 
   // Read file to temporary buffer
   source_file = fopen(source_file_path, "rb");
@@ -216,6 +214,9 @@ int CeedLoadSourceToInitializedBuffer(Ceed ceed, const char *source_file_path, C
       bool  is_ceed_header    = next_left_chevron && (next_new_line - next_left_chevron > 0) &&
                             (!strncmp(next_left_chevron, "<ceed/jit-source/", 17) || !strncmp(next_left_chevron, "<ceed/types.h>", 14) ||
                              !strncmp(next_left_chevron, "<ceed/ceed-f32.h>", 17) || !strncmp(next_left_chevron, "<ceed/ceed-f64.h>", 17));
+      bool is_std_header =
+          next_left_chevron && (next_new_line - next_left_chevron > 0) &&
+          (!strncmp(next_left_chevron, "<std", 4) || !strncmp(next_left_chevron, "<math.h>", 8) || !strncmp(next_left_chevron, "<ceed", 5));
 
       if (is_local_header || is_ceed_header) {
         // ---- Build source path
@@ -254,6 +255,13 @@ int CeedLoadSourceToInitializedBuffer(Ceed ceed, const char *source_file_path, C
         }
         CeedCall(CeedFree(&include_source_path));
         CeedCall(CeedFree(&normalized_include_source_path));
+      } else if (!is_std_header) {
+        long header_copy_size = next_new_line - first_hash + 1;
+
+        CeedCall(CeedRealloc(current_size + copy_size + header_copy_size + 2, buffer));
+        memcpy(&(*buffer)[current_size + copy_size], "\n", 2);
+        memcpy(&(*buffer)[current_size + copy_size + 1], first_hash, header_copy_size);
+        memcpy(&(*buffer)[current_size + copy_size + header_copy_size], "", 1);
       }
       file_offset = strchr(first_hash, '\n') - temp_buffer + 1;
     }
@@ -390,28 +398,33 @@ int CeedGetJitRelativePath(const char *absolute_file_path, const char **relative
   @ref Backend
 **/
 int CeedGetJitAbsolutePath(Ceed ceed, const char *relative_file_path, const char **absolute_file_path) {
-  Ceed ceed_parent;
+  const char **jit_source_dirs;
+  CeedInt      num_source_dirs;
 
   // Debug
   CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "---------- Ceed JiT ----------\n");
   CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "Relative JiT source file: ");
   CeedDebug(ceed, "%s\n", relative_file_path);
 
-  CeedCall(CeedGetParent(ceed, &ceed_parent));
-  for (CeedInt i = 0; i < ceed_parent->num_jit_source_roots; i++) {
+  CeedCallBackend(CeedGetJitSourceRoots(ceed, &num_source_dirs, &jit_source_dirs));
+  for (CeedInt i = 0; i < num_source_dirs; i++) {
     bool is_valid;
 
     // Debug
     CeedDebug256(ceed, CEED_DEBUG_COLOR_SUCCESS, "Checking JiT root: ");
-    CeedDebug(ceed, "%s\n", ceed_parent->jit_source_roots[i]);
+    CeedDebug(ceed, "%s\n", jit_source_dirs[i]);
 
     // Build and check absolute path with current root
-    CeedCall(CeedPathConcatenate(ceed, ceed_parent->jit_source_roots[i], relative_file_path, (char **)absolute_file_path));
+    CeedCall(CeedPathConcatenate(ceed, jit_source_dirs[i], relative_file_path, (char **)absolute_file_path));
     CeedCall(CeedCheckFilePath(ceed, *absolute_file_path, &is_valid));
 
-    if (is_valid) return CEED_ERROR_SUCCESS;
+    if (is_valid) {
+      CeedCallBackend(CeedRestoreJitSourceRoots(ceed, &jit_source_dirs));
+      return CEED_ERROR_SUCCESS;
+    }
     // LCOV_EXCL_START
-    else CeedCall(CeedFree(absolute_file_path));
+    else
+      CeedCall(CeedFree(absolute_file_path));
     // LCOV_EXCL_STOP
   }
   // LCOV_EXCL_START

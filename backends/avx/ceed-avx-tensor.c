@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -10,7 +10,7 @@
 #include <immintrin.h>
 #include <stdbool.h>
 
-#ifdef CEED_F64_H
+#ifdef CEED_SCALAR_IS_FP64
 #define rtype __m256d
 #define loadu _mm256_loadu_pd
 #define storeu _mm256_storeu_pd

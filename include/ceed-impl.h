@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -99,7 +99,9 @@ struct Ceed_private {
   Ceed         op_fallback_ceed, op_fallback_parent;
   const char  *op_fallback_resource;
   char       **jit_source_roots;
-  CeedInt      num_jit_source_roots;
+  CeedInt      num_jit_source_roots, max_jit_source_roots, num_jit_source_roots_readers;
+  char       **jit_defines;
+  CeedInt      num_jit_defines, max_jit_defines, num_jit_defines_readers;
   int (*Error)(Ceed, const char *, int, const char *, int, const char *, va_list *);
   int (*SetStream)(Ceed, void *);
   int (*GetPreferredMemType)(CeedMemType *);
@@ -135,10 +137,10 @@ struct CeedVector_private {
   Ceed ceed;
   int (*HasValidArray)(CeedVector, bool *);
   int (*HasBorrowedArrayOfType)(CeedVector, CeedMemType, bool *);
-  int (*CopyStrided)(CeedVector, CeedSize, CeedSize, CeedVector);
+  int (*CopyStrided)(CeedVector, CeedSize, CeedSize, CeedSize, CeedVector);
   int (*SetArray)(CeedVector, CeedMemType, CeedCopyMode, CeedScalar *);
   int (*SetValue)(CeedVector, CeedScalar);
-  int (*SetValueStrided)(CeedVector, CeedSize, CeedSize, CeedScalar);
+  int (*SetValueStrided)(CeedVector, CeedSize, CeedSize, CeedSize, CeedScalar);
   int (*SyncArray)(CeedVector, CeedMemType);
   int (*TakeArray)(CeedVector, CeedMemType, CeedScalar **);
   int (*GetArray)(CeedVector, CeedMemType, CeedScalar **);

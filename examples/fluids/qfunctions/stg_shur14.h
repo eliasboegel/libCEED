@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -12,9 +12,11 @@
 /// SetupSTG_Rand reads in the input files and fills in STGShur14Context.
 /// Then STGShur14_CalcQF is run over quadrature points.
 /// Before the program exits, TearDownSTG is run to free the memory of the allocated arrays.
-#include <ceed.h>
+#include <ceed/types.h>
+#ifndef CEED_RUNNING_JIT_PASS
 #include <math.h>
 #include <stdlib.h>
+#endif
 
 #include "newtonian_state.h"
 #include "setupgeo_helpers.h"
@@ -308,8 +310,8 @@ CEED_QFUNCTION(ICsStg)(void *ctx, CeedInt Q, const CeedScalar *const *in, CeedSc
       for (CeedInt j = 0; j < 3; j++) u[j] = ubar[j];
     }
 
-    CeedScalar Y[5] = {P0, u[0], u[1], u[2], theta0}, q[5];
-    State      s    = StateFromY(gas, Y);
+    CeedScalar Y[5] = {P0, u[0], u[1], u[2], theta0}, q[5] = {0.};
+    State      s = StateFromY(gas, Y);
     StateToQ(gas, s, q, gas->state_var);
     for (CeedInt j = 0; j < 5; j++) {
       q0[j][i] = q[j];
@@ -506,8 +508,8 @@ CEED_QFUNCTION(StgShur14InflowStrongQF)(void *ctx, CeedInt Q, const CeedScalar *
       for (CeedInt j = 0; j < 3; j++) u[j] = ubar[j];
     }
 
-    CeedScalar Y[5] = {P0, u[0], u[1], u[2], theta0}, q[5];
-    State      s    = StateFromY(gas, Y);
+    CeedScalar Y[5] = {P0, u[0], u[1], u[2], theta0}, q[5] = {0.};
+    State      s = StateFromY(gas, Y);
     StateToQ(gas, s, q, gas->state_var);
     switch (gas->state_var) {
       case STATEVAR_CONSERVATIVE:

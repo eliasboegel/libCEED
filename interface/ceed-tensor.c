@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -36,6 +36,7 @@ int CeedTensorContractCreate(Ceed ceed, CeedTensorContract *contract) {
     CeedCall(CeedGetObjectDelegate(ceed, &delegate, "TensorContract"));
     CeedCheck(delegate, ceed, CEED_ERROR_UNSUPPORTED, "Backend does not implement CeedTensorContractCreate");
     CeedCall(CeedTensorContractCreate(delegate, contract));
+    CeedCall(CeedDestroy(&delegate));
     return CEED_ERROR_SUCCESS;
   }
 
@@ -123,7 +124,8 @@ int CeedTensorContractStridedApply(CeedTensorContract contract, CeedInt A, CeedI
   @ref Backend
 **/
 int CeedTensorContractGetCeed(CeedTensorContract contract, Ceed *ceed) {
-  *ceed = CeedTensorContractReturnCeed(contract);
+  *ceed = NULL;
+  CeedCall(CeedReferenceCopy(CeedTensorContractReturnCeed(contract), ceed));
   return CEED_ERROR_SUCCESS;
 }
 

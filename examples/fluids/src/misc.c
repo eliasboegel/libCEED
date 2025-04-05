@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -95,6 +95,7 @@ PetscErrorCode DMPlexInsertBoundaryValues_FromICs(DM dm, PetscBool insert_essent
 
 static PetscErrorCode BinaryReadIntoInt(PetscViewer viewer, PetscInt *out, PetscDataType file_type) {
   PetscFunctionBeginUser;
+  *out = -13;  // appease the overzealous GCC compiler warning Gods
   if (file_type == PETSC_INT32) {
     PetscInt32 val;
     PetscCall(PetscViewerBinaryRead(viewer, &val, 1, NULL, PETSC_INT32));

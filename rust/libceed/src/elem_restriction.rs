@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -8,7 +8,7 @@
 //! A Ceed ElemRestriction decomposes elements and groups the degrees of freedom
 //! (dofs) according to the different elements they belong to.
 
-use crate::prelude::*;
+use crate::{prelude::*, vector::Vector, TransposeMode};
 
 // -----------------------------------------------------------------------------
 // ElemRestriction option
@@ -28,7 +28,7 @@ impl<'a> From<&'a ElemRestriction<'_>> for ElemRestrictionOpt<'a> {
 impl<'a> ElemRestrictionOpt<'a> {
     /// Transform a Rust libCEED ElemRestrictionOpt into C libCEED
     /// CeedElemRestriction
-    pub(crate) fn to_raw(self) -> bind_ceed::CeedElemRestriction {
+    pub(crate) fn to_raw(&self) -> bind_ceed::CeedElemRestriction {
         match self {
             Self::Some(rstr) => rstr.ptr,
             Self::None => unsafe { bind_ceed::CEED_ELEMRESTRICTION_NONE },
@@ -38,7 +38,7 @@ impl<'a> ElemRestrictionOpt<'a> {
     /// Check if an ElemRestrictionOpt is Some
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, ElemRestrictionOpt, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -66,7 +66,7 @@ impl<'a> ElemRestrictionOpt<'a> {
     /// Check if an ElemRestrictionOpt is None
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, ElemRestrictionOpt, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -121,7 +121,7 @@ impl<'a> fmt::Display for ElemRestriction<'a> {
     /// View an ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -153,6 +153,7 @@ impl<'a> fmt::Display for ElemRestriction<'a> {
 // -----------------------------------------------------------------------------
 impl<'a> ElemRestriction<'a> {
     // Constructors
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ceed: &crate::Ceed,
         nelem: usize,
@@ -172,7 +173,7 @@ impl<'a> ElemRestriction<'a> {
             isize::try_from(lsize).unwrap(),
             mtype as bind_ceed::CeedMemType,
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedElemRestrictionCreate(
                 ceed.ptr,
                 nelem,
@@ -185,21 +186,21 @@ impl<'a> ElemRestriction<'a> {
                 offsets.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
-    pub(crate) fn from_raw(ptr: bind_ceed::CeedElemRestriction) -> crate::Result<Self> {
+    pub(crate) unsafe fn from_raw(ptr: bind_ceed::CeedElemRestriction) -> crate::Result<Self> {
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_oriented(
         ceed: &crate::Ceed,
         nelem: usize,
@@ -220,7 +221,7 @@ impl<'a> ElemRestriction<'a> {
             isize::try_from(lsize).unwrap(),
             mtype as bind_ceed::CeedMemType,
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedElemRestrictionCreateOriented(
                 ceed.ptr,
                 nelem,
@@ -234,14 +235,14 @@ impl<'a> ElemRestriction<'a> {
                 orients.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_curl_oriented(
         ceed: &crate::Ceed,
         nelem: usize,
@@ -262,7 +263,7 @@ impl<'a> ElemRestriction<'a> {
             isize::try_from(lsize).unwrap(),
             mtype as bind_ceed::CeedMemType,
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedElemRestrictionCreateCurlOriented(
                 ceed.ptr,
                 nelem,
@@ -276,8 +277,7 @@ impl<'a> ElemRestriction<'a> {
                 curlorients.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
@@ -299,7 +299,7 @@ impl<'a> ElemRestriction<'a> {
             i32::try_from(ncomp).unwrap(),
             isize::try_from(lsize).unwrap(),
         );
-        let ierr = unsafe {
+        ceed.check_error(unsafe {
             bind_ceed::CeedElemRestrictionCreateStrided(
                 ceed.ptr,
                 nelem,
@@ -309,28 +309,29 @@ impl<'a> ElemRestriction<'a> {
                 strides.as_ptr(),
                 &mut ptr,
             )
-        };
-        ceed.check_error(ierr)?;
+        })?;
         Ok(Self {
             ptr,
             _lifeline: PhantomData,
         })
     }
 
+    // Raw Ceed for error handling
+    #[doc(hidden)]
+    fn ceed(&self) -> bind_ceed::Ceed {
+        unsafe { bind_ceed::CeedElemRestrictionReturnCeed(self.ptr) }
+    }
+
     // Error handling
     #[doc(hidden)]
     fn check_error(&self, ierr: i32) -> crate::Result<i32> {
-        let mut ptr = std::ptr::null_mut();
-        unsafe {
-            bind_ceed::CeedElemRestrictionGetCeed(self.ptr, &mut ptr);
-        }
-        crate::check_error(ptr, ierr)
+        crate::check_error(|| self.ceed(), ierr)
     }
 
     /// Create an Lvector for an ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -350,16 +351,16 @@ impl<'a> ElemRestriction<'a> {
     pub fn create_lvector<'b>(&self) -> crate::Result<Vector<'b>> {
         let mut ptr_lvector = std::ptr::null_mut();
         let null = std::ptr::null_mut() as *mut _;
-        let ierr =
-            unsafe { bind_ceed::CeedElemRestrictionCreateVector(self.ptr, &mut ptr_lvector, null) };
-        self.check_error(ierr)?;
-        Vector::from_raw(ptr_lvector)
+        self.check_error(unsafe {
+            bind_ceed::CeedElemRestrictionCreateVector(self.ptr, &mut ptr_lvector, null)
+        })?;
+        unsafe { Vector::from_raw(ptr_lvector) }
     }
 
     /// Create an Evector for an ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -379,16 +380,16 @@ impl<'a> ElemRestriction<'a> {
     pub fn create_evector<'b>(&self) -> crate::Result<Vector<'b>> {
         let mut ptr_evector = std::ptr::null_mut();
         let null = std::ptr::null_mut() as *mut _;
-        let ierr =
-            unsafe { bind_ceed::CeedElemRestrictionCreateVector(self.ptr, null, &mut ptr_evector) };
-        self.check_error(ierr)?;
-        Vector::from_raw(ptr_evector)
+        self.check_error(unsafe {
+            bind_ceed::CeedElemRestrictionCreateVector(self.ptr, null, &mut ptr_evector)
+        })?;
+        unsafe { Vector::from_raw(ptr_evector) }
     }
 
     /// Create Vectors for an ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -409,12 +410,11 @@ impl<'a> ElemRestriction<'a> {
     pub fn create_vectors<'b, 'c>(&self) -> crate::Result<(Vector<'b>, Vector<'c>)> {
         let mut ptr_lvector = std::ptr::null_mut();
         let mut ptr_evector = std::ptr::null_mut();
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedElemRestrictionCreateVector(self.ptr, &mut ptr_lvector, &mut ptr_evector)
-        };
-        self.check_error(ierr)?;
-        let lvector = Vector::from_raw(ptr_lvector)?;
-        let evector = Vector::from_raw(ptr_evector)?;
+        })?;
+        let lvector = unsafe { Vector::from_raw(ptr_lvector)? };
+        let evector = unsafe { Vector::from_raw(ptr_evector)? };
         Ok((lvector, evector))
     }
 
@@ -429,7 +429,7 @@ impl<'a> ElemRestriction<'a> {
     ///               decided by the backend.
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType, Scalar, TransposeMode};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -458,7 +458,7 @@ impl<'a> ElemRestriction<'a> {
     /// ```
     pub fn apply(&self, tmode: TransposeMode, u: &Vector, ru: &mut Vector) -> crate::Result<i32> {
         let tmode = tmode as bind_ceed::CeedTransposeMode;
-        let ierr = unsafe {
+        self.check_error(unsafe {
             bind_ceed::CeedElemRestrictionApply(
                 self.ptr,
                 tmode,
@@ -466,14 +466,13 @@ impl<'a> ElemRestriction<'a> {
                 ru.ptr,
                 bind_ceed::CEED_REQUEST_IMMEDIATE,
             )
-        };
-        self.check_error(ierr)
+        })
     }
 
     /// Returns the Lvector component stride
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -499,7 +498,7 @@ impl<'a> ElemRestriction<'a> {
     /// Returns the total number of elements in the range of a ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -524,7 +523,7 @@ impl<'a> ElemRestriction<'a> {
     /// Returns the size of elements in the ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -550,7 +549,7 @@ impl<'a> ElemRestriction<'a> {
     /// Returns the size of the Lvector for an ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -575,7 +574,7 @@ impl<'a> ElemRestriction<'a> {
     /// Returns the number of components in the elements of an ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -601,7 +600,7 @@ impl<'a> ElemRestriction<'a> {
     /// Returns the multiplicity of nodes in an ElemRestriction
     ///
     /// ```
-    /// # use libceed::prelude::*;
+    /// # use libceed::{prelude::*, MemType};
     /// # fn main() -> libceed::Result<()> {
     /// # let ceed = libceed::Ceed::default_init();
     /// let nelem = 3;
@@ -628,8 +627,9 @@ impl<'a> ElemRestriction<'a> {
     /// # }
     /// ```
     pub fn multiplicity(&self, mult: &mut Vector) -> crate::Result<i32> {
-        let ierr = unsafe { bind_ceed::CeedElemRestrictionGetMultiplicity(self.ptr, mult.ptr) };
-        self.check_error(ierr)
+        self.check_error(unsafe {
+            bind_ceed::CeedElemRestrictionGetMultiplicity(self.ptr, mult.ptr)
+        })
     }
 }
 

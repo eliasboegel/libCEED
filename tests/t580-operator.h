@@ -1,11 +1,11 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
 //
 // This file is part of CEED:  http://github.com/ceed
 
-#include <ceed.h>
+#include <ceed/types.h>
 
 // Compute det(A)
 CEED_QFUNCTION_HELPER CeedScalar MatDet2x2(const CeedScalar A[2][2]) { return A[0][0] * A[1][1] - A[1][0] * A[0][1]; }

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -12,9 +12,11 @@
 #include <cuda.h>
 
 typedef struct {
+  bool           use_fallback;
   CeedInt        dim;
-  CeedInt        Q_1d;
+  CeedInt        Q, Q_1d;
   CeedInt        max_P_1d;
+  CeedInt        thread_1d;
   CUmodule       module;
   CUfunction     op;
   FieldsInt_Cuda indices;
@@ -22,11 +24,11 @@ typedef struct {
   Fields_Cuda    B;
   Fields_Cuda    G;
   CeedScalar    *W;
+  Points_Cuda    points;
 } CeedOperator_Cuda_gen;
 
 typedef struct {
   const char *qfunction_name;
-  const char *qfunction_source;
   void       *d_c;
 } CeedQFunction_Cuda_gen;
 

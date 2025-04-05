@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -391,7 +391,7 @@ PetscErrorCode DMSwarmCreateReferenceCoordinates(DM dm_swarm, IS *is_points, Vec
     }
 
     // -- Cleanup
-    PetscCall(PetscFree(points_in_cell));
+    PetscCall(DMSwarmSortRestorePointsPerCell(dm_swarm, cell, &num_points_in_cell, &points_in_cell));
   }
   cell_points[points_offset - 1] = num_points_local + points_offset;
 
@@ -617,6 +617,7 @@ PetscErrorCode SetupProblemSwarm(DM dm_swarm, Ceed ceed, BPData bp_data, CeedDat
   // Swarm objects
   {
     const PetscInt *cell_points;
+    CeedInt        *offsets;
     IS              is_points;
     Vec             X_ref;
     CeedInt         num_elem;
@@ -628,7 +629,7 @@ PetscErrorCode SetupProblemSwarm(DM dm_swarm, Ceed ceed, BPData bp_data, CeedDat
 
     PetscCall(ISGetIndices(is_points, &cell_points));
     PetscInt num_points = cell_points[num_elem + 1] - num_elem - 2;
-    CeedInt  offsets[num_elem + 1 + num_points];
+    PetscCall(PetscCalloc1(num_elem + 1 + num_points, &offsets));
 
     for (PetscInt i = 0; i < num_elem + 1; i++) offsets[i] = cell_points[i + 1] - 1;
     for (PetscInt i = num_elem + 1; i < num_points + num_elem + 1; i++) offsets[i] = cell_points[i + 1];
@@ -685,6 +686,7 @@ PetscErrorCode SetupProblemSwarm(DM dm_swarm, Ceed ceed, BPData bp_data, CeedDat
 
     // Cleanup
     PetscCall(ISDestroy(&is_points));
+    PetscCall(PetscFree(offsets));
     PetscCall(VecDestroy(&X_ref));
   }
 

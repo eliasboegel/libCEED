@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -194,16 +194,13 @@ static int CeedScalarView(const char *name, const char *fp_fmt, CeedInt m, CeedI
   @ref Developer
 **/
 static int CeedBasisCreateProjectionMatrices(CeedBasis basis_from, CeedBasis basis_to, CeedScalar **interp_project, CeedScalar **grad_project) {
-  Ceed    ceed;
   bool    are_both_tensor;
   CeedInt Q, Q_to, Q_from, P_to, P_from;
-
-  CeedCall(CeedBasisGetCeed(basis_to, &ceed));
 
   // Check for compatible quadrature spaces
   CeedCall(CeedBasisGetNumQuadraturePoints(basis_to, &Q_to));
   CeedCall(CeedBasisGetNumQuadraturePoints(basis_from, &Q_from));
-  CeedCheck(Q_to == Q_from, ceed, CEED_ERROR_DIMENSION,
+  CeedCheck(Q_to == Q_from, CeedBasisReturnCeed(basis_to), CEED_ERROR_DIMENSION,
             "Bases must have compatible quadrature spaces."
             " 'basis_from' has %" CeedInt_FMT " points and 'basis_to' has %" CeedInt_FMT,
             Q_from, Q_to);
@@ -231,7 +228,7 @@ static int CeedBasisCreateProjectionMatrices(CeedBasis basis_from, CeedBasis bas
 
   CeedCall(CeedBasisGetFESpace(basis_to, &fe_space_to));
   CeedCall(CeedBasisGetFESpace(basis_from, &fe_space_from));
-  CeedCheck(fe_space_to == fe_space_from, ceed, CEED_ERROR_MINOR,
+  CeedCheck(fe_space_to == fe_space_from, CeedBasisReturnCeed(basis_to), CEED_ERROR_MINOR,
             "Bases must both be the same FE space type."
             " 'basis_from' is a %s and 'basis_to' is a %s",
             CeedFESpaces[fe_space_from], CeedFESpaces[fe_space_to]);
@@ -267,7 +264,7 @@ static int CeedBasisCreateProjectionMatrices(CeedBasis basis_from, CeedBasis bas
 
   // Compute interp_to^+, pseudoinverse of interp_to
   CeedCall(CeedCalloc(Q * q_comp * P_to, &interp_to_inv));
-  CeedCall(CeedMatrixPseudoinverse(ceed, interp_to_source, Q * q_comp, P_to, interp_to_inv));
+  CeedCall(CeedMatrixPseudoinverse(CeedBasisReturnCeed(basis_to), interp_to_source, Q * q_comp, P_to, interp_to_inv));
   // Build matrices
   CeedInt     num_matrices = 1 + (fe_space_to == CEED_FE_SPACE_H1) * (are_both_tensor ? 1 : dim);
   CeedScalar *input_from[num_matrices], *output_project[num_matrices];
@@ -281,7 +278,7 @@ static int CeedBasisCreateProjectionMatrices(CeedBasis basis_from, CeedBasis bas
   for (CeedInt m = 0; m < num_matrices; m++) {
     // output_project = interp_to^+ * interp_from
     memcpy(interp_from, input_from[m], Q * P_from * q_comp * sizeof(input_from[m][0]));
-    CeedCall(CeedMatrixMatrixMultiply(ceed, interp_to_inv, input_from[m], output_project[m], P_to, P_from, Q * q_comp));
+    CeedCall(CeedMatrixMatrixMultiply(CeedBasisReturnCeed(basis_to), interp_to_inv, input_from[m], output_project[m], P_to, P_from, Q * q_comp));
     // Round zero to machine precision
     for (CeedInt i = 0; i < P_to * P_from; i++) {
       if (fabs(output_project[m][i]) < 10 * CEED_EPSILON) output_project[m][i] = 0.0;
@@ -291,6 +288,60 @@ static int CeedBasisCreateProjectionMatrices(CeedBasis basis_from, CeedBasis bas
   // Cleanup
   CeedCall(CeedFree(&interp_to_inv));
   CeedCall(CeedFree(&interp_from));
+  return CEED_ERROR_SUCCESS;
+}
+
+/**
+  @brief Check input vector dimensions for CeedBasisApply[Add]
+
+  @param[in]  basis     `CeedBasis` to evaluate
+  @param[in]  num_elem  The number of elements to apply the basis evaluation to;
+                          the backend will specify the ordering in @ref CeedElemRestrictionCreate()
+  @param[in]  t_mode    @ref CEED_NOTRANSPOSE to evaluate from nodes to quadrature points;
+                          @ref CEED_TRANSPOSE to apply the transpose, mapping from quadrature points to nodes
+  @param[in]  eval_mode @ref CEED_EVAL_NONE to use values directly,
+                          @ref CEED_EVAL_INTERP to use interpolated values,
+                          @ref CEED_EVAL_GRAD to use gradients,
+                          @ref CEED_EVAL_DIV to use divergence,
+                          @ref CEED_EVAL_CURL to use curl,
+                          @ref CEED_EVAL_WEIGHT to use quadrature weights
+  @param[in]  u         Input `CeedVector`
+  @param[out] v         Output `CeedVector`
+
+  @return An error code: 0 - success, otherwise - failure
+
+  @ref Developer
+**/
+static int CeedBasisApplyCheckDims(CeedBasis basis, CeedInt num_elem, CeedTransposeMode t_mode, CeedEvalMode eval_mode, CeedVector u, CeedVector v) {
+  CeedInt  dim, num_comp, q_comp, num_nodes, num_qpts;
+  CeedSize u_length = 0, v_length;
+
+  CeedCall(CeedBasisGetDimension(basis, &dim));
+  CeedCall(CeedBasisGetNumComponents(basis, &num_comp));
+  CeedCall(CeedBasisGetNumQuadratureComponents(basis, eval_mode, &q_comp));
+  CeedCall(CeedBasisGetNumNodes(basis, &num_nodes));
+  CeedCall(CeedBasisGetNumQuadraturePoints(basis, &num_qpts));
+  CeedCall(CeedVectorGetLength(v, &v_length));
+  if (u) CeedCall(CeedVectorGetLength(u, &u_length));
+
+  // Check vector lengths to prevent out of bounds issues
+  bool has_good_dims = true;
+  switch (eval_mode) {
+    case CEED_EVAL_NONE:
+    case CEED_EVAL_INTERP:
+    case CEED_EVAL_GRAD:
+    case CEED_EVAL_DIV:
+    case CEED_EVAL_CURL:
+      has_good_dims = ((t_mode == CEED_TRANSPOSE && u_length >= (CeedSize)num_elem * (CeedSize)num_comp * (CeedSize)num_qpts * (CeedSize)q_comp &&
+                        v_length >= (CeedSize)num_elem * (CeedSize)num_comp * (CeedSize)num_nodes) ||
+                       (t_mode == CEED_NOTRANSPOSE && v_length >= (CeedSize)num_elem * (CeedSize)num_qpts * (CeedSize)num_comp * (CeedSize)q_comp &&
+                        u_length >= (CeedSize)num_elem * (CeedSize)num_comp * (CeedSize)num_nodes));
+      break;
+    case CEED_EVAL_WEIGHT:
+      has_good_dims = v_length >= (CeedSize)num_elem * (CeedSize)num_qpts;
+      break;
+  }
+  CeedCheck(has_good_dims, CeedBasisReturnCeed(basis), CEED_ERROR_DIMENSION, "Input/output vectors too short for basis and evaluation mode");
   return CEED_ERROR_SUCCESS;
 }
 
@@ -318,9 +369,7 @@ static int CeedBasisApplyAtPointsCheckDims(CeedBasis basis, CeedInt num_elem, co
                                            CeedEvalMode eval_mode, CeedVector x_ref, CeedVector u, CeedVector v) {
   CeedInt  dim, num_comp, num_q_comp, num_nodes, P_1d = 1, Q_1d = 1, total_num_points = 0;
   CeedSize x_length = 0, u_length = 0, v_length;
-  Ceed     ceed;
 
-  CeedCall(CeedBasisGetCeed(basis, &ceed));
   CeedCall(CeedBasisGetDimension(basis, &dim));
   CeedCall(CeedBasisGetNumNodes1D(basis, &P_1d));
   CeedCall(CeedBasisGetNumQuadraturePoints1D(basis, &Q_1d));
@@ -333,13 +382,14 @@ static int CeedBasisApplyAtPointsCheckDims(CeedBasis basis, CeedInt num_elem, co
 
   // Check compatibility coordinates vector
   for (CeedInt i = 0; i < num_elem; i++) total_num_points += num_points[i];
-  CeedCheck((x_length >= (CeedSize)total_num_points * (CeedSize)dim) || (eval_mode == CEED_EVAL_WEIGHT), ceed, CEED_ERROR_DIMENSION,
+  CeedCheck((x_length >= (CeedSize)total_num_points * (CeedSize)dim) || (eval_mode == CEED_EVAL_WEIGHT), CeedBasisReturnCeed(basis),
+            CEED_ERROR_DIMENSION,
             "Length of reference coordinate vector incompatible with basis dimension and number of points."
             " Found reference coordinate vector of length %" CeedSize_FMT ", not of length %" CeedSize_FMT ".",
             x_length, (CeedSize)total_num_points * (CeedSize)dim);
 
   // Check CEED_EVAL_WEIGHT only on CEED_NOTRANSPOSE
-  CeedCheck(eval_mode != CEED_EVAL_WEIGHT || t_mode == CEED_NOTRANSPOSE, ceed, CEED_ERROR_UNSUPPORTED,
+  CeedCheck(eval_mode != CEED_EVAL_WEIGHT || t_mode == CEED_NOTRANSPOSE, CeedBasisReturnCeed(basis), CEED_ERROR_UNSUPPORTED,
             "CEED_EVAL_WEIGHT only supported with CEED_NOTRANSPOSE");
 
   // Check vector lengths to prevent out of bounds issues
@@ -364,10 +414,11 @@ static int CeedBasisApplyAtPointsCheckDims(CeedBasis basis, CeedInt num_elem, co
     case CEED_EVAL_NONE:
     case CEED_EVAL_DIV:
     case CEED_EVAL_CURL:
-      return CeedError(ceed, CEED_ERROR_UNSUPPORTED, "Evaluation at arbitrary points not supported for %s", CeedEvalModes[eval_mode]);
+      return CeedError(CeedBasisReturnCeed(basis), CEED_ERROR_UNSUPPORTED, "Evaluation at arbitrary points not supported for %s",
+                       CeedEvalModes[eval_mode]);
       // LCOV_EXCL_STOP
   }
-  CeedCheck(has_good_dims, ceed, CEED_ERROR_DIMENSION, "Input/output vectors too short for basis and evaluation mode");
+  CeedCheck(has_good_dims, CeedBasisReturnCeed(basis), CEED_ERROR_DIMENSION, "Input/output vectors too short for basis and evaluation mode");
   return CEED_ERROR_SUCCESS;
 }
 
@@ -395,12 +446,10 @@ static int CeedBasisApplyAtPointsCheckDims(CeedBasis basis, CeedInt num_elem, co
 static int CeedBasisApplyAtPoints_Core(CeedBasis basis, bool apply_add, CeedInt num_elem, const CeedInt *num_points, CeedTransposeMode t_mode,
                                        CeedEvalMode eval_mode, CeedVector x_ref, CeedVector u, CeedVector v) {
   CeedInt dim, num_comp, P_1d = 1, Q_1d = 1, total_num_points = num_points[0];
-  Ceed    ceed;
 
-  CeedCall(CeedBasisGetCeed(basis, &ceed));
   CeedCall(CeedBasisGetDimension(basis, &dim));
   // Inserting check because clang-tidy doesn't understand this cannot occur
-  CeedCheck(dim > 0, ceed, CEED_ERROR_UNSUPPORTED, "Malformed CeedBasis, dim > 0 is required");
+  CeedCheck(dim > 0, CeedBasisReturnCeed(basis), CEED_ERROR_UNSUPPORTED, "Malformed CeedBasis, dim > 0 is required");
   CeedCall(CeedBasisGetNumNodes1D(basis, &P_1d));
   CeedCall(CeedBasisGetNumQuadraturePoints1D(basis, &Q_1d));
   CeedCall(CeedBasisGetNumComponents(basis, &num_comp));
@@ -410,9 +459,11 @@ static int CeedBasisApplyAtPoints_Core(CeedBasis basis, bool apply_add, CeedInt 
     bool is_tensor_basis;
 
     CeedCall(CeedBasisIsTensor(basis, &is_tensor_basis));
-    CeedCheck(is_tensor_basis, ceed, CEED_ERROR_UNSUPPORTED, "Evaluation at arbitrary points only supported for tensor product bases");
+    CeedCheck(is_tensor_basis, CeedBasisReturnCeed(basis), CEED_ERROR_UNSUPPORTED,
+              "Evaluation at arbitrary points only supported for tensor product bases");
   }
-  CeedCheck(num_elem == 1, ceed, CEED_ERROR_UNSUPPORTED, "Evaluation at arbitrary  points only supported for a single element at a time");
+  CeedCheck(num_elem == 1, CeedBasisReturnCeed(basis), CEED_ERROR_UNSUPPORTED,
+            "Evaluation at arbitrary  points only supported for a single element at a time");
   if (eval_mode == CEED_EVAL_WEIGHT) {
     CeedCall(CeedVectorSetValue(v, 1.0));
     return CEED_ERROR_SUCCESS;
@@ -421,6 +472,7 @@ static int CeedBasisApplyAtPoints_Core(CeedBasis basis, bool apply_add, CeedInt 
     // Build basis mapping from nodes to Chebyshev coefficients
     CeedScalar       *chebyshev_interp_1d, *chebyshev_grad_1d, *chebyshev_q_weight_1d;
     const CeedScalar *q_ref_1d;
+    Ceed              ceed;
 
     CeedCall(CeedCalloc(P_1d * Q_1d, &chebyshev_interp_1d));
     CeedCall(CeedCalloc(P_1d * Q_1d, &chebyshev_grad_1d));
@@ -428,6 +480,7 @@ static int CeedBasisApplyAtPoints_Core(CeedBasis basis, bool apply_add, CeedInt 
     CeedCall(CeedBasisGetQRef(basis, &q_ref_1d));
     CeedCall(CeedBasisGetChebyshevInterp1D(basis, chebyshev_interp_1d));
 
+    CeedCall(CeedBasisGetCeed(basis, &ceed));
     CeedCall(CeedVectorCreate(ceed, num_comp * CeedIntPow(Q_1d, dim), &basis->vec_chebyshev));
     CeedCall(CeedBasisCreateTensorH1(ceed, dim, num_comp, P_1d, Q_1d, chebyshev_interp_1d, chebyshev_grad_1d, q_ref_1d, chebyshev_q_weight_1d,
                                      &basis->basis_chebyshev));
@@ -436,6 +489,7 @@ static int CeedBasisApplyAtPoints_Core(CeedBasis basis, bool apply_add, CeedInt 
     CeedCall(CeedFree(&chebyshev_interp_1d));
     CeedCall(CeedFree(&chebyshev_grad_1d));
     CeedCall(CeedFree(&chebyshev_q_weight_1d));
+    CeedCall(CeedDestroy(&ceed));
   }
 
   // Create TensorContract object if needed, such as a basis from the GPU backends
@@ -447,7 +501,8 @@ static int CeedBasisApplyAtPoints_Core(CeedBasis basis, bool apply_add, CeedInt 
     // Only need matching tensor contraction dimensions, any type of basis will work
     CeedCall(CeedBasisCreateTensorH1Lagrange(ceed_ref, dim, num_comp, P_1d, Q_1d, CEED_GAUSS, &basis_ref));
     // Note - clang-tidy doesn't know basis_ref->contract must be valid here
-    CeedCheck(basis_ref && basis_ref->contract, ceed, CEED_ERROR_UNSUPPORTED, "Reference CPU ceed failed to create a tensor contraction object");
+    CeedCheck(basis_ref && basis_ref->contract, CeedBasisReturnCeed(basis), CEED_ERROR_UNSUPPORTED,
+              "Reference CPU ceed failed to create a tensor contraction object");
     CeedCall(CeedTensorContractReferenceCopy(basis_ref->contract, &basis->contract));
     CeedCall(CeedBasisDestroy(&basis_ref));
     CeedCall(CeedDestroy(&ceed_ref));
@@ -600,6 +655,42 @@ static int CeedBasisApplyAtPoints_Core(CeedBasis basis, bool apply_add, CeedInt 
 /// @{
 
 /**
+  @brief Fallback to a reference implementation for a non tensor-product basis for \f$H^1\f$ discretizations.
+    This function may only be called inside of a backend `BasisCreateH1` function.
+    This is used by a backend when the specific parameters for a `CeedBasis` exceed the backend's support, such as
+    when a `interp` and `grad` matrices require too many bytes to fit into shared memory on a GPU.
+
+  @param[in]  ceed      `Ceed` object used to create the `CeedBasis`
+  @param[in]  topo      Topology of element, e.g. hypercube, simplex, etc
+  @param[in]  num_comp  Number of field components (1 for scalar fields)
+  @param[in]  num_nodes Total number of nodes
+  @param[in]  num_qpts  Total number of quadrature points
+  @param[in]  interp    Row-major (`num_qpts * num_nodes`) matrix expressing the values of nodal basis functions at quadrature points
+  @param[in]  grad      Row-major (`dim * num_qpts * num_nodes`) matrix expressing derivatives of nodal basis functions at quadrature points
+  @param[in]  q_ref     Array of length `num_qpts * dim` holding the locations of quadrature points on the reference element
+  @param[in]  q_weight  Array of length `num_qpts` holding the quadrature weights on the reference element
+  @param[out] basis     Newly created `CeedBasis`
+
+  @return An error code: 0 - success, otherwise - failure
+
+  @ref User
+**/
+int CeedBasisCreateH1Fallback(Ceed ceed, CeedElemTopology topo, CeedInt num_comp, CeedInt num_nodes, CeedInt num_qpts, const CeedScalar *interp,
+                              const CeedScalar *grad, const CeedScalar *q_ref, const CeedScalar *q_weight, CeedBasis basis) {
+  CeedInt P = num_nodes, Q = num_qpts, dim = 0;
+  Ceed    delegate;
+
+  CeedCall(CeedGetObjectDelegate(ceed, &delegate, "Basis"));
+  CeedCheck(delegate, ceed, CEED_ERROR_UNSUPPORTED, "Backend does not implement BasisCreateH1");
+
+  CeedCall(CeedReferenceCopy(delegate, &(basis)->ceed));
+  CeedCall(CeedBasisGetTopologyDimension(topo, &dim));
+  CeedCall(delegate->BasisCreateH1(topo, dim, P, Q, interp, grad, q_ref, q_weight, basis));
+  CeedCall(CeedDestroy(&delegate));
+  return CEED_ERROR_SUCCESS;
+}
+
+/**
   @brief Return collocated gradient matrix
 
   @param[in]  basis         `CeedBasis`
@@ -628,6 +719,7 @@ int CeedBasisGetCollocatedGrad(CeedBasis basis, CeedScalar *collo_grad_1d) {
   CeedCall(CeedMatrixMatrixMultiply(ceed, grad_1d, (const CeedScalar *)interp_1d_pinv, collo_grad_1d, Q_1d, Q_1d, P_1d));
 
   CeedCall(CeedFree(&interp_1d_pinv));
+  CeedCall(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -669,6 +761,7 @@ int CeedBasisGetChebyshevInterp1D(CeedBasis basis, CeedScalar *chebyshev_interp_
   // Cleanup
   CeedCall(CeedFree(&C));
   CeedCall(CeedFree(&chebyshev_coeffs_1d_inv));
+  CeedCall(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -776,17 +869,21 @@ int CeedBasisGetNumQuadratureComponents(CeedBasis basis, CeedEvalMode eval_mode,
 /**
   @brief Estimate number of FLOPs required to apply `CeedBasis` in `t_mode` and `eval_mode`
 
-  @param[in]  basis     `CeedBasis` to estimate FLOPs for
-  @param[in]  t_mode    Apply basis or transpose
-  @param[in]  eval_mode @ref CeedEvalMode
-  @param[out] flops     Address of variable to hold FLOPs estimate
+  @param[in]  basis        `CeedBasis` to estimate FLOPs for
+  @param[in]  t_mode       Apply basis or transpose
+  @param[in]  eval_mode    @ref CeedEvalMode
+  @param[in]  is_at_points Evaluate the basis at points or quadrature points
+  @param[in]  num_points   Number of points basis is evaluated at
+  @param[out] flops        Address of variable to hold FLOPs estimate
 
   @ref Backend
 **/
-int CeedBasisGetFlopsEstimate(CeedBasis basis, CeedTransposeMode t_mode, CeedEvalMode eval_mode, CeedSize *flops) {
+int CeedBasisGetFlopsEstimate(CeedBasis basis, CeedTransposeMode t_mode, CeedEvalMode eval_mode, bool is_at_points, CeedInt num_points,
+                              CeedSize *flops) {
   bool is_tensor;
 
   CeedCall(CeedBasisIsTensor(basis, &is_tensor));
+  CeedCheck(!is_at_points || is_tensor, CeedBasisReturnCeed(basis), CEED_ERROR_INCOMPATIBLE, "Can only evaluate tensor-product bases at points");
   if (is_tensor) {
     CeedInt dim, num_comp, P_1d, Q_1d;
 
@@ -799,32 +896,68 @@ int CeedBasisGetFlopsEstimate(CeedBasis basis, CeedTransposeMode t_mode, CeedEva
       Q_1d = P_1d;
     }
     CeedInt tensor_flops = 0, pre = num_comp * CeedIntPow(P_1d, dim - 1), post = 1;
+
     for (CeedInt d = 0; d < dim; d++) {
       tensor_flops += 2 * pre * P_1d * post * Q_1d;
       pre /= P_1d;
       post *= Q_1d;
     }
-    switch (eval_mode) {
-      case CEED_EVAL_NONE:
-        *flops = 0;
-        break;
-      case CEED_EVAL_INTERP:
-        *flops = tensor_flops;
-        break;
-      case CEED_EVAL_GRAD:
-        *flops = tensor_flops * 2;
-        break;
-      case CEED_EVAL_DIV:
-      case CEED_EVAL_CURL: {
-        // LCOV_EXCL_START
-        return CeedError(CeedBasisReturnCeed(basis), CEED_ERROR_INCOMPATIBLE, "Tensor basis evaluation for %s not supported",
-                         CeedEvalModes[eval_mode]);
-        break;
-        // LCOV_EXCL_STOP
+    if (is_at_points) {
+      CeedInt chebyshev_flops = (Q_1d - 2) * 3 + 1, d_chebyshev_flops = (Q_1d - 2) * 8 + 1;
+      CeedInt point_tensor_flops = 0, pre = CeedIntPow(Q_1d, dim - 1), post = 1;
+
+      for (CeedInt d = 0; d < dim; d++) {
+        point_tensor_flops += 2 * pre * Q_1d * post * 1;
+        pre /= P_1d;
+        post *= Q_1d;
       }
-      case CEED_EVAL_WEIGHT:
-        *flops = dim * CeedIntPow(Q_1d, dim);
-        break;
+
+      switch (eval_mode) {
+        case CEED_EVAL_NONE:
+          *flops = 0;
+          break;
+        case CEED_EVAL_INTERP:
+          *flops = tensor_flops + num_points * (dim * chebyshev_flops + point_tensor_flops + (t_mode == CEED_TRANSPOSE ? CeedIntPow(Q_1d, dim) : 0));
+          break;
+        case CEED_EVAL_GRAD:
+          *flops = tensor_flops + num_points * (dim * (d_chebyshev_flops + (dim - 1) * chebyshev_flops + point_tensor_flops +
+                                                       (t_mode == CEED_TRANSPOSE ? CeedIntPow(Q_1d, dim) : 0)));
+          break;
+        case CEED_EVAL_DIV:
+        case CEED_EVAL_CURL: {
+          // LCOV_EXCL_START
+          return CeedError(CeedBasisReturnCeed(basis), CEED_ERROR_INCOMPATIBLE, "Tensor basis evaluation for %s not supported",
+                           CeedEvalModes[eval_mode]);
+          break;
+          // LCOV_EXCL_STOP
+        }
+        case CEED_EVAL_WEIGHT:
+          *flops = num_points;
+          break;
+      }
+    } else {
+      switch (eval_mode) {
+        case CEED_EVAL_NONE:
+          *flops = 0;
+          break;
+        case CEED_EVAL_INTERP:
+          *flops = tensor_flops;
+          break;
+        case CEED_EVAL_GRAD:
+          *flops = tensor_flops * 2;
+          break;
+        case CEED_EVAL_DIV:
+        case CEED_EVAL_CURL: {
+          // LCOV_EXCL_START
+          return CeedError(CeedBasisReturnCeed(basis), CEED_ERROR_INCOMPATIBLE, "Tensor basis evaluation for %s not supported",
+                           CeedEvalModes[eval_mode]);
+          break;
+          // LCOV_EXCL_STOP
+        }
+        case CEED_EVAL_WEIGHT:
+          *flops = dim * CeedIntPow(Q_1d, dim);
+          break;
+      }
     }
   } else {
     CeedInt dim, num_comp, q_comp, num_nodes, num_qpts;
@@ -1328,6 +1461,7 @@ int CeedBasisCreateTensorH1(Ceed ceed, CeedInt dim, CeedInt num_comp, CeedInt P_
     CeedCall(CeedGetObjectDelegate(ceed, &delegate, "Basis"));
     CeedCheck(delegate, ceed, CEED_ERROR_UNSUPPORTED, "Backend does not implement BasisCreateTensorH1");
     CeedCall(CeedBasisCreateTensorH1(delegate, dim, num_comp, P_1d, Q_1d, interp_1d, grad_1d, q_ref_1d, q_weight_1d, basis));
+    CeedCall(CeedDestroy(&delegate));
     return CEED_ERROR_SUCCESS;
   }
 
@@ -1449,7 +1583,7 @@ cleanup:
   @param[in]  num_qpts  Total number of quadrature points
   @param[in]  interp    Row-major (`num_qpts * num_nodes`) matrix expressing the values of nodal basis functions at quadrature points
   @param[in]  grad      Row-major (`dim * num_qpts * num_nodes`) matrix expressing derivatives of nodal basis functions at quadrature points
-  @param[in]  q_ref     Array of length `num_qpts` * dim holding the locations of quadrature points on the reference element
+  @param[in]  q_ref     Array of length `num_qpts * dim` holding the locations of quadrature points on the reference element
   @param[in]  q_weight  Array of length `num_qpts` holding the quadrature weights on the reference element
   @param[out] basis     Address of the variable where the newly created `CeedBasis` will be stored
 
@@ -1467,6 +1601,7 @@ int CeedBasisCreateH1(Ceed ceed, CeedElemTopology topo, CeedInt num_comp, CeedIn
     CeedCall(CeedGetObjectDelegate(ceed, &delegate, "Basis"));
     CeedCheck(delegate, ceed, CEED_ERROR_UNSUPPORTED, "Backend does not implement BasisCreateH1");
     CeedCall(CeedBasisCreateH1(delegate, topo, num_comp, num_nodes, num_qpts, interp, grad, q_ref, q_weight, basis));
+    CeedCall(CeedDestroy(&delegate));
     return CEED_ERROR_SUCCESS;
   }
 
@@ -1526,6 +1661,7 @@ int CeedBasisCreateHdiv(Ceed ceed, CeedElemTopology topo, CeedInt num_comp, Ceed
     CeedCall(CeedGetObjectDelegate(ceed, &delegate, "Basis"));
     CeedCheck(delegate, ceed, CEED_ERROR_UNSUPPORTED, "Backend does not implement BasisCreateHdiv");
     CeedCall(CeedBasisCreateHdiv(delegate, topo, num_comp, num_nodes, num_qpts, interp, div, q_ref, q_weight, basis));
+    CeedCall(CeedDestroy(&delegate));
     return CEED_ERROR_SUCCESS;
   }
 
@@ -1585,6 +1721,7 @@ int CeedBasisCreateHcurl(Ceed ceed, CeedElemTopology topo, CeedInt num_comp, Cee
     CeedCall(CeedGetObjectDelegate(ceed, &delegate, "Basis"));
     CeedCheck(delegate, ceed, CEED_ERROR_UNSUPPORTED, "Backend does not implement BasisCreateHcurl");
     CeedCall(CeedBasisCreateHcurl(delegate, topo, num_comp, num_nodes, num_qpts, interp, curl, q_ref, q_weight, basis));
+    CeedCall(CeedDestroy(&delegate));
     return CEED_ERROR_SUCCESS;
   }
 
@@ -1681,6 +1818,7 @@ int CeedBasisCreateProjection(CeedBasis basis_from, CeedBasis basis_to, CeedBasi
   // Cleanup
   CeedCall(CeedFree(&interp_project));
   CeedCall(CeedFree(&grad_project));
+  CeedCall(CeedDestroy(&ceed));
   return CEED_ERROR_SUCCESS;
 }
 
@@ -1779,62 +1917,6 @@ int CeedBasisView(CeedBasis basis, FILE *stream) {
       CeedCall(CeedScalarView("curl", "\t% 12.8f", q_comp * Q, P, curl, stream));
     }
   }
-  return CEED_ERROR_SUCCESS;
-}
-
-/**
-  @brief Check input vector dimensions for CeedBasisApply[Add]
-
-  @param[in]  basis     `CeedBasis` to evaluate
-  @param[in]  num_elem  The number of elements to apply the basis evaluation to;
-                          the backend will specify the ordering in @ref CeedElemRestrictionCreate()
-  @param[in]  t_mode    @ref CEED_NOTRANSPOSE to evaluate from nodes to quadrature points;
-                          @ref CEED_TRANSPOSE to apply the transpose, mapping from quadrature points to nodes
-  @param[in]  eval_mode @ref CEED_EVAL_NONE to use values directly,
-                          @ref CEED_EVAL_INTERP to use interpolated values,
-                          @ref CEED_EVAL_GRAD to use gradients,
-                          @ref CEED_EVAL_DIV to use divergence,
-                          @ref CEED_EVAL_CURL to use curl,
-                          @ref CEED_EVAL_WEIGHT to use quadrature weights
-  @param[in]  u         Input `CeedVector`
-  @param[out] v         Output `CeedVector`
-
-  @return An error code: 0 - success, otherwise - failure
-
-  @ref Developer
-**/
-static int CeedBasisApplyCheckDims(CeedBasis basis, CeedInt num_elem, CeedTransposeMode t_mode, CeedEvalMode eval_mode, CeedVector u, CeedVector v) {
-  CeedInt  dim, num_comp, q_comp, num_nodes, num_qpts;
-  CeedSize u_length = 0, v_length;
-  Ceed     ceed;
-
-  CeedCall(CeedBasisGetCeed(basis, &ceed));
-  CeedCall(CeedBasisGetDimension(basis, &dim));
-  CeedCall(CeedBasisGetNumComponents(basis, &num_comp));
-  CeedCall(CeedBasisGetNumQuadratureComponents(basis, eval_mode, &q_comp));
-  CeedCall(CeedBasisGetNumNodes(basis, &num_nodes));
-  CeedCall(CeedBasisGetNumQuadraturePoints(basis, &num_qpts));
-  CeedCall(CeedVectorGetLength(v, &v_length));
-  if (u) CeedCall(CeedVectorGetLength(u, &u_length));
-
-  // Check vector lengths to prevent out of bounds issues
-  bool has_good_dims = true;
-  switch (eval_mode) {
-    case CEED_EVAL_NONE:
-    case CEED_EVAL_INTERP:
-    case CEED_EVAL_GRAD:
-    case CEED_EVAL_DIV:
-    case CEED_EVAL_CURL:
-      has_good_dims = ((t_mode == CEED_TRANSPOSE && u_length >= (CeedSize)num_elem * (CeedSize)num_comp * (CeedSize)num_qpts * (CeedSize)q_comp &&
-                        v_length >= (CeedSize)num_elem * (CeedSize)num_comp * (CeedSize)num_nodes) ||
-                       (t_mode == CEED_NOTRANSPOSE && v_length >= (CeedSize)num_elem * (CeedSize)num_qpts * (CeedSize)num_comp * (CeedSize)q_comp &&
-                        u_length >= (CeedSize)num_elem * (CeedSize)num_comp * (CeedSize)num_nodes));
-      break;
-    case CEED_EVAL_WEIGHT:
-      has_good_dims = v_length >= (CeedSize)num_elem * (CeedSize)num_qpts;
-      break;
-  }
-  CeedCheck(has_good_dims, ceed, CEED_ERROR_DIMENSION, "Input/output vectors too short for basis and evaluation mode");
   return CEED_ERROR_SUCCESS;
 }
 
@@ -1969,7 +2051,8 @@ int CeedBasisApplyAddAtPoints(CeedBasis basis, CeedInt num_elem, const CeedInt *
   @ref Advanced
 **/
 int CeedBasisGetCeed(CeedBasis basis, Ceed *ceed) {
-  *ceed = CeedBasisReturnCeed(basis);
+  *ceed = NULL;
+  CeedCall(CeedReferenceCopy(CeedBasisReturnCeed(basis), ceed));
   return CEED_ERROR_SUCCESS;
 }
 

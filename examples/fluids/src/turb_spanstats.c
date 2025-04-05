@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024, Lawrence Livermore National Security, LLC and other CEED contributors.
+// Copyright (c) 2017-2025, Lawrence Livermore National Security, LLC and other CEED contributors.
 // All Rights Reserved. See the top-level LICENSE and NOTICE files for details.
 //
 // SPDX-License-Identifier: BSD-2-Clause
@@ -238,6 +238,8 @@ PetscErrorCode SpanStatsSetupDataDestroy(SpanStatsSetupData data) {
 
   PetscCallCeed(ceed, CeedVectorDestroy(&data->x_coord));
 
+  PetscCheck(CeedDestroy(&ceed) == CEED_ERROR_SUCCESS, PETSC_COMM_WORLD, PETSC_ERR_LIB, "Destroying Ceed object failed");
+
   PetscCall(PetscFree(data));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
@@ -326,7 +328,7 @@ PetscErrorCode SetupL2ProjectionStats(Ceed ceed, User user, CeedData ceed_data, 
     Mat mat_mass;
     KSP ksp;
 
-    PetscCall(MatCeedCreate(user->spanstats.dm, user->spanstats.dm, op_mass, NULL, &mat_mass));
+    PetscCall(MatCreateCeed(user->spanstats.dm, user->spanstats.dm, op_mass, NULL, &mat_mass));
 
     PetscCall(KSPCreate(PetscObjectComm((PetscObject)user->spanstats.dm), &ksp));
     PetscCall(KSPSetOptionsPrefix(ksp, "turbulence_spanstats_"));

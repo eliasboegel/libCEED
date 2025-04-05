@@ -1,4 +1,4 @@
-name: ARM and IBM Power
+name: IBM Power
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04]
         compiler: [gcc-13]
-        arch: [aarch64, ppc64le]
+        arch: [ppc64le]
         distro: [ubuntu22.04]
 
     runs-on: ${{ matrix.os }}
@@ -21,7 +21,7 @@ jobs:
     - name: Environment setup
       uses: actions/checkout@v4
     - name: Hardware setup and test libCEED
-      uses: uraimo/run-on-arch-action@v2
+      uses: uraimo/run-on-arch-action@v3
       env:
         CC: ${{ matrix.compiler }}
         FC: gfortran-13
@@ -36,5 +36,5 @@ jobs:
           apt-get install -y python3
           uname -a
           make info
-          make -j2
-          PROVE_OPTS=-v make prove -j2
+          make -j
+          make prove -j search="t5 ex"
